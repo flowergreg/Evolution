@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="it">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Evoluzione locomozione 2D</title>
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <main class="app">
+      <header>
+        <h1>Simulatore semplificato di selezione naturale</h1>
+        <p>
+          1000 creature casuali → selezione delle migliori 500 → 500 figli mutati.
+        </p>
+      </header>
+
+      <section class="controls card">
+        <div class="row">
+          <button id="resetBtn">Reset</button>
+          <button id="stepBtn">Avanza di 1 ciclo</button>
+          <button id="autoBtn">Avvio automatico</button>
+          <label>
+            Velocità auto
+            <input id="autoSpeed" type="range" min="50" max="1500" value="350" step="50" />
+          </label>
+          <span id="autoSpeedLabel">350 ms</span>
+        </div>
+        <div class="stats" id="stats"></div>
+      </section>
+
+      <section class="chart card">
+        <h2>Andamento distanza</h2>
+        <canvas id="chartCanvas" width="900" height="320"></canvas>
+      </section>
+
+      <section class="worlds">
+        <article class="card">
+          <h2>Creatura più veloce</h2>
+          <canvas id="bestCanvas" width="420" height="220"></canvas>
+        </article>
+        <article class="card">
+          <h2>Creatura media</h2>
+          <canvas id="avgCanvas" width="420" height="220"></canvas>
+        </article>
+      </section>
+    </main>
+
+    <script src="app.js"></script>
+  </body>
+</html>
