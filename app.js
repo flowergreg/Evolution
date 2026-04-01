@@ -3,11 +3,6 @@ const SURVIVORS = 500;
 const STEP_SECONDS = 10;
 const EVAL_DT = 0.05;
 const GRAVITY = -9.81;
-const MAX_MUSCLE_FORCE = 160;
-const MAX_HORIZONTAL_BOOST = 1.8;
-const MAX_SPEED = 6;
-const MAX_WORLD_X = 150;
-const MAX_WORLD_Y = 8;
 
 const statsEl = document.getElementById('stats');
 const resetBtn = document.getElementById('resetBtn');
@@ -143,7 +138,7 @@ function stepPhysics(creature, state, t, dt) {
     const dy = b.y - a.y;
     const dist = Math.hypot(dx, dy) || 0.0001;
     const target = m.restLength + m.amplitude * Math.sin(t * m.frequency * Math.PI * 2 + m.phase);
-    const springMag = clamp(m.stiffness * (dist - target), -MAX_MUSCLE_FORCE, MAX_MUSCLE_FORCE);
+    const springMag = m.stiffness * (dist - target);
     const dirX = dx / dist;
     const dirY = dy / dist;
 
@@ -153,7 +148,7 @@ function stepPhysics(creature, state, t, dt) {
     forces[m.to].fy -= springMag * dirY;
 
     const wave = Math.sin(t * m.frequency * Math.PI * 2 + m.phase);
-    const groundBoost = clamp(wave * 0.9 * creature.traction, -MAX_HORIZONTAL_BOOST, MAX_HORIZONTAL_BOOST);
+    const groundBoost = wave * 0.9 * creature.traction;
     if (a.grounded) forces[m.from].fx += groundBoost;
     if (b.grounded) forces[m.to].fx += groundBoost;
   });
@@ -162,13 +157,11 @@ function stepPhysics(creature, state, t, dt) {
     const ax = forces[i].fx / n.mass;
     const ay = forces[i].fy / n.mass;
 
-    n.vx = clamp((n.vx + ax * dt) * creature.damping, -MAX_SPEED, MAX_SPEED);
-    n.vy = clamp((n.vy + ay * dt) * creature.damping, -MAX_SPEED, MAX_SPEED);
+    n.vx = (n.vx + ax * dt) * creature.damping;
+    n.vy = (n.vy + ay * dt) * creature.damping;
 
     n.x += n.vx * dt;
     n.y += n.vy * dt;
-    n.x = clamp(n.x, -MAX_WORLD_X, MAX_WORLD_X);
-    n.y = clamp(n.y, -1, MAX_WORLD_Y);
 
     n.grounded = false;
     if (n.y < 0) {
