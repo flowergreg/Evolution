@@ -1,0 +1,30 @@
+# Evolution Playground (selezione naturale semplificata)
+
+Web app in JavaScript vanilla che simula una selezione naturale ispirata a creature 2D fatte da nodi e muscoli.
+
+## Regole implementate
+
+- Popolazione iniziale: **1000 creature** casuali.
+- A ogni ciclo:
+  - sopravvivono le **500** con distanza maggiore,
+  - ciascuna genera 1 figlio mutato,
+  - la popolazione torna a 1000.
+- Fitness: **metri percorsi in 10 secondi**.
+- Fisica semplificata:
+  - gravità,
+  - pavimento verde impenetrabile,
+  - attrito/contatto col suolo,
+  - muscoli come molle oscillanti,
+  - limiti a forza e velocità per evitare esplosioni numeriche.
+- Ogni nodo può essere collegato a **più di due muscoli** (grafo generale, non solo catena).
+
+## Visualizzazione
+
+- Grafico max/media distanza per ciclo.
+- Due viste 2D animate (creatura migliore e mediana).
+- Pavimento verde con segnalatori metrici per percepire la velocità.
+- Avanzamento manuale o automatico.
+
+## Avvio
+
+Apri `index.html` in un browser moderno.
