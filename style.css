@@ -1,0 +1,92 @@
+:root {
+  color-scheme: dark;
+  --bg: #111827;
+  --card: #1f2937;
+  --line: #374151;
+  --text: #e5e7eb;
+  --muted: #9ca3af;
+  --accent: #22c55e;
+  --accent2: #38bdf8;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+  background: radial-gradient(circle at top, #1f2937 0%, var(--bg) 45%);
+  color: var(--text);
+}
+
+.app {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 1rem;
+  display: grid;
+  gap: 1rem;
+}
+
+header h1 {
+  margin: 0;
+  font-size: 1.45rem;
+}
+
+header p {
+  margin: 0.5rem 0 0;
+  color: var(--muted);
+}
+
+.card {
+  background: color-mix(in srgb, var(--card), black 15%);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 0.85rem;
+}
+
+.controls .row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+  align-items: center;
+}
+
+button {
+  background: #0f172a;
+  color: var(--text);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 0.48rem 0.8rem;
+  cursor: pointer;
+}
+
+button:hover {
+  border-color: var(--accent2);
+}
+
+.stats {
+  margin-top: 0.9rem;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 0.35rem;
+  color: var(--muted);
+}
+
+canvas {
+  width: 100%;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #0b1020;
+}
+
+.worlds {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 1rem;
+}
+
+h2 {
+  margin: 0 0 0.5rem;
+  font-size: 1rem;
+}
