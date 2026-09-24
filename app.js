@@ -4,6 +4,7 @@ const STEP_SECONDS = 10;
 const EVAL_DT = 0.05;
 const GRAVITY = -9.81;
 const MAX_MUSCLE_FORCE = 160;
+const ENERGY_RAMP_SECONDS = 0.5; // i muscoli si caricano da 0 a 100% in questo tempo
 const AIR_DAMPING = 0.98;
 const GROUND_FRICTION = 0.86;
 const MAX_SPEED = 6;
@@ -199,6 +200,8 @@ function createSimState(creature) {
 
 function stepPhysics(creature, state, t, dt) {
   const forces = state.nodes.map(() => ({ fx: 0, fy: GRAVITY }));
+  // Carica graduale: impedisce il balzo iniziale dovuto allo scatto dei muscoli.
+  const maxForce = MAX_MUSCLE_FORCE * Math.min(1, t / ENERGY_RAMP_SECONDS);
 
   creature.muscles.forEach((m) => {
     const a = state.nodes[m.from];
@@ -207,7 +210,7 @@ function stepPhysics(creature, state, t, dt) {
     const dy = b.y - a.y;
     const dist = Math.hypot(dx, dy) || 0.0001;
     const target = m.restLength + m.amplitude * Math.sin(t * m.frequency * Math.PI * 2 + m.phase);
-    const springMag = clamp(m.stiffness * (dist - target), -MAX_MUSCLE_FORCE, MAX_MUSCLE_FORCE);
+    const springMag = clamp(m.stiffness * (dist - target), -maxForce, maxForce);
     const dirX = dx / dist;
     const dirY = dy / dist;
 

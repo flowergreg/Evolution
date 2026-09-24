@@ -25,6 +25,8 @@ Piccola web app in JavaScript vanilla che simula, in modo didattico, una selezio
 - Gravità e resistenza dell'aria uguale per tutte le creature.
 - Pavimento verde impenetrabile con attrito: i nodi a terra fanno presa, quelli sollevati scivolano liberamente.
   Per avanzare una creatura deve quindi coordinare i muscoli in modo da spingere con i nodi appoggiati.
+- All'avvio i muscoli si caricano gradualmente, da 0 a 100% della forza in 0,5 secondi:
+  così le creature non possono avanzare con un unico balzo iniziale e devono camminare.
 - Limiti a forza dei muscoli e velocità dei nodi, per evitare "esplosioni" numeriche.
 
 ## Visualizzazione
