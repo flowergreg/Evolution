@@ -13,9 +13,11 @@ Piccola web app in JavaScript vanilla che simula, in modo didattico, una selezio
   - ogni coppia di nodi può avere **al massimo un muscolo** (con 3 nodi, al massimo 3 muscoli).
 - Fitness: **metri percorsi in 10 secondi** dal baricentro della creatura.
 - A ogni ciclo:
-  - sopravvivono le **500** creature che hanno percorso più strada;
+  - ogni distanza viene moltiplicata per un fattore di **fortuna** casuale fra 0,5 e 1
+    (selezione del "buono abbastanza", non solo del migliore);
+  - sopravvivono le **500** creature con il punteggio (distanza × fortuna) più alto;
   - nascono 500 figli; ogni genitore è scelto con un piccolo torneo (si estraggono due sopravvissute
-    e vince la migliore), quindi le creature più veloci hanno in media più figli;
+    e vince quella con il punteggio più alto), quindi le creature più veloci hanno in media più figli;
   - circa il 30% dei figli nasce dall'incrocio di due genitori;
   - ogni figlio riceve mutazioni: piccole variazioni, con occasionali salti ampi, e a volte
     aggiunta o rimozione di nodi e muscoli (un nodo nuovo nasce vicino al corpo, collegato ai due nodi più vicini);

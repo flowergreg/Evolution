@@ -19,6 +19,7 @@ const EVOLUTION = {
   bigJumpScale: 5,
   tournamentSize: 2, // sfidanti estratti per scegliere ogni genitore
   crossoverRate: 0.3, // quota di figli nati da due genitori
+  luckMin: 0.5, // fortuna: la distanza di ognuno è moltiplicata per un numero a caso fra luckMin e 1
 };
 
 const statsEl = document.getElementById('stats');
@@ -226,7 +227,7 @@ function crossover(parentA, parentB) {
 }
 
 // Torneo: si estraggono alcune sopravvissute a caso e vince la migliore.
-// La popolazione è ordinata per distanza, quindi vince l'indice più basso.
+// Le sopravvissute sono ordinate per punteggio (distanza × fortuna), quindi vince l'indice più basso.
 function pickParent(survivors) {
   let best = randInt(0, survivors.length - 1);
   for (let i = 1; i < EVOLUTION.tournamentSize; i += 1) best = Math.min(best, randInt(0, survivors.length - 1));
@@ -357,7 +358,12 @@ function evaluatePopulation() {
 
 function evolveOnce() {
   generation += 1;
-  const survivors = population.slice(0, SURVIVORS);
+  // Selezione "buono abbastanza": sopravvivenza e scelta dei genitori dipendono
+  // dalla distanza moltiplicata per un fattore di fortuna, nuovo a ogni ciclo.
+  population.forEach((c) => {
+    c.score = c.distance * rand(EVOLUTION.luckMin, 1);
+  });
+  const survivors = [...population].sort((a, b) => b.score - a.score).slice(0, SURVIVORS);
   const children = Array.from({ length: POPULATION_SIZE - SURVIVORS }, () => makeChild(survivors));
   population = survivors.concat(children);
   evaluatePopulation();
