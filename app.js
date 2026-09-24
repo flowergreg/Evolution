@@ -4,7 +4,8 @@ const STEP_SECONDS = 10;
 const EVAL_DT = 0.05;
 const GRAVITY = -9.81;
 const MAX_MUSCLE_FORCE = 160;
-const MAX_HORIZONTAL_BOOST = 1.8;
+const AIR_DAMPING = 0.98;
+const GROUND_FRICTION = 0.86;
 const MAX_SPEED = 6;
 const MAX_WORLD_X = 150;
 const MAX_WORLD_Y = 8;
@@ -28,6 +29,7 @@ let generation = 0;
 let population = [];
 let history = [];
 let autoTimer = null;
+let autoRunning = false;
 
 function rand(min, max) {
   return Math.random() * (max - min) + min;
@@ -68,26 +70,38 @@ function createRandomCreature() {
   return {
     nodes: Array.from({ length: nodeCount }, () => randomNode()),
     muscles: Array.from({ length: musclesCount }, () => randomMuscle(nodeCount)),
-    traction: rand(0.6, 1.6),
-    damping: rand(0.90, 0.98),
     distance: 0,
+    evaluated: false,
     trace: null,
   };
 }
 
-function rewireMuscles(creature) {
+function addNode(creature) {
+  creature.nodes.push(randomNode());
+  const newIndex = creature.nodes.length - 1;
+  const muscle = randomMuscle(creature.nodes.length);
+  muscle.from = newIndex;
+  muscle.to = randInt(0, newIndex - 1);
+  creature.muscles.push(muscle);
+}
+
+// Toglie un nodo e riaggancia i muscoli rimasti ai nodi giusti.
+function removeNode(creature) {
+  const removed = randInt(0, creature.nodes.length - 1);
+  creature.nodes.splice(removed, 1);
+  creature.muscles = creature.muscles.filter((m) => m.from !== removed && m.to !== removed);
   creature.muscles.forEach((m) => {
-    m.from = clamp(m.from, 0, creature.nodes.length - 1);
-    m.to = clamp(m.to, 0, creature.nodes.length - 1);
-    if (m.to === m.from) m.to = (m.from + 1) % creature.nodes.length;
+    if (m.from > removed) m.from -= 1;
+    if (m.to > removed) m.to -= 1;
   });
+  while (creature.muscles.length < creature.nodes.length) creature.muscles.push(randomMuscle(creature.nodes.length));
 }
 
 function mutateCreature(parent) {
-  const child = structuredClone(parent);
+  const child = structuredClone({ ...parent, trace: null });
 
-  if (Math.random() < 0.15 && child.nodes.length < 10) child.nodes.push(randomNode());
-  if (Math.random() < 0.12 && child.nodes.length > 3) child.nodes.splice(randInt(0, child.nodes.length - 1), 1);
+  if (Math.random() < 0.15 && child.nodes.length < 10) addNode(child);
+  if (Math.random() < 0.12 && child.nodes.length > 3) removeNode(child);
 
   if (Math.random() < 0.3 && child.muscles.length < 28) child.muscles.push(randomMuscle(child.nodes.length));
   if (Math.random() < 0.2 && child.muscles.length > child.nodes.length) child.muscles.splice(randInt(0, child.muscles.length - 1), 1);
@@ -111,12 +125,8 @@ function mutateCreature(parent) {
     m.stiffness = clamp(m.stiffness + rand(-8, 8), 8, 140);
   });
 
-  child.traction = clamp(child.traction + rand(-0.06, 0.06), 0.3, 2.1);
-  child.damping = clamp(child.damping + rand(-0.01, 0.01), 0.84, 0.995);
   child.distance = 0;
-  child.trace = null;
-
-  rewireMuscles(child);
+  child.evaluated = false;
   return child;
 }
 
@@ -151,19 +161,14 @@ function stepPhysics(creature, state, t, dt) {
     forces[m.from].fy += springMag * dirY;
     forces[m.to].fx -= springMag * dirX;
     forces[m.to].fy -= springMag * dirY;
-
-    const wave = Math.sin(t * m.frequency * Math.PI * 2 + m.phase);
-    const groundBoost = clamp(wave * 0.9 * creature.traction, -MAX_HORIZONTAL_BOOST, MAX_HORIZONTAL_BOOST);
-    if (a.grounded) forces[m.from].fx += groundBoost;
-    if (b.grounded) forces[m.to].fx += groundBoost;
   });
 
   state.nodes.forEach((n, i) => {
     const ax = forces[i].fx / n.mass;
     const ay = forces[i].fy / n.mass;
 
-    n.vx = clamp((n.vx + ax * dt) * creature.damping, -MAX_SPEED, MAX_SPEED);
-    n.vy = clamp((n.vy + ay * dt) * creature.damping, -MAX_SPEED, MAX_SPEED);
+    n.vx = clamp((n.vx + ax * dt) * AIR_DAMPING, -MAX_SPEED, MAX_SPEED);
+    n.vy = clamp((n.vy + ay * dt) * AIR_DAMPING, -MAX_SPEED, MAX_SPEED);
 
     n.x += n.vx * dt;
     n.y += n.vy * dt;
@@ -174,7 +179,7 @@ function stepPhysics(creature, state, t, dt) {
     if (n.y < 0) {
       n.y = 0;
       if (n.vy < 0) n.vy = -n.vy * 0.08;
-      n.vx *= 0.86;
+      n.vx *= GROUND_FRICTION;
       n.grounded = true;
     }
   });
@@ -205,8 +210,12 @@ function simulateCreature(creature, duration, dt, trackFrames = false) {
 }
 
 function evaluatePopulation() {
+  // La simulazione è deterministica: le sopravvissute hanno già la loro distanza.
   population.forEach((c) => {
+    c.trace = null;
+    if (c.evaluated) return;
     c.distance = simulateCreature(c, STEP_SECONDS, EVAL_DT, false).distance;
+    c.evaluated = true;
   });
 
   population.sort((a, b) => b.distance - a.distance);
@@ -377,7 +386,7 @@ function renderAll() {
   const best = population[0];
   const median = population[Math.floor(population.length / 2)];
   drawCreatureFrame(bestCtx, bestCanvas, best, '#22c55e', 'Best');
-  drawCreatureFrame(avgCtx, avgCanvas, median, '#38bdf8', 'Media');
+  drawCreatureFrame(avgCtx, avgCanvas, median, '#38bdf8', 'Mediana');
 }
 
 function animateWorlds() {
@@ -385,7 +394,7 @@ function animateWorlds() {
     const best = population[0];
     const median = population[Math.floor(population.length / 2)];
     drawCreatureFrame(bestCtx, bestCanvas, best, '#22c55e', 'Best');
-    drawCreatureFrame(avgCtx, avgCanvas, median, '#38bdf8', 'Media');
+    drawCreatureFrame(avgCtx, avgCanvas, median, '#38bdf8', 'Mediana');
   }
   requestAnimationFrame(animateWorlds);
 }
@@ -394,17 +403,26 @@ function updateAutoLabel() {
   autoSpeedLabel.textContent = `${autoSpeedInput.value} ms`;
 }
 
+// Il ciclo successivo parte solo dopo che il precedente è terminato,
+// così il browser non si intasa se il calcolo è più lento della pausa scelta.
+function scheduleNextAuto() {
+  autoTimer = setTimeout(() => {
+    evolveOnce();
+    if (autoRunning) scheduleNextAuto();
+  }, Number(autoSpeedInput.value));
+}
+
 function stopAuto() {
-  if (autoTimer) {
-    clearInterval(autoTimer);
-    autoTimer = null;
-    autoBtn.textContent = 'Avvio automatico';
-  }
+  autoRunning = false;
+  clearTimeout(autoTimer);
+  autoTimer = null;
+  autoBtn.textContent = 'Avvio automatico';
 }
 
 function startAuto() {
   stopAuto();
-  autoTimer = setInterval(evolveOnce, Number(autoSpeedInput.value));
+  autoRunning = true;
+  scheduleNextAuto();
   autoBtn.textContent = 'Pausa automatica';
 }
 
@@ -414,10 +432,10 @@ resetBtn.addEventListener('click', () => {
 });
 
 stepBtn.addEventListener('click', evolveOnce);
-autoBtn.addEventListener('click', () => (autoTimer ? stopAuto() : startAuto()));
+autoBtn.addEventListener('click', () => (autoRunning ? stopAuto() : startAuto()));
 autoSpeedInput.addEventListener('input', () => {
   updateAutoLabel();
-  if (autoTimer) startAuto();
+  if (autoRunning) startAuto();
 });
 
 updateAutoLabel();
