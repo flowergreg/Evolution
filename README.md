@@ -8,7 +8,7 @@ Piccola web app in JavaScript vanilla che simula, in modo didattico, una selezio
 - Ogni creatura ha:
   - da 3 a 10 nodi, ciascuno con posizione iniziale, massa e **attrito** (da 0 = ghiaccio a 1 = presa totale);
   - muscoli che collegano coppie di nodi e si comportano come molle oscillanti
-    (lunghezza a riposo, ampiezza, frequenza, fase, rigidità);
+    (lunghezza a riposo fino a 1,5 m, ampiezza, frequenza, fase, rigidità);
   - ogni nodo può essere collegato a **più muscoli** (grafo generale, non solo catena).
   - ogni coppia di nodi può avere **al massimo un muscolo** (con 3 nodi, al massimo 3 muscoli).
 - Fitness: **metri percorsi in 10 secondi** dal baricentro della creatura.
@@ -40,7 +40,8 @@ Piccola web app in JavaScript vanilla che simula, in modo didattico, una selezio
 - **Ostacoli:** quadratini sul terreno a partire da 2,5 m, con altezza, larghezza e distanza
   regolabili dalla pagina durante la simulazione (valori iniziali 0,2 / 0,2 / 1,5 m; altezza 0 = terreno piatto).
   Un nodo che arriva da sopra si appoggia sulla cima, uno che arriva di lato urta la parete.
-- Limite alla forza di ogni muscolo.
+- Limite alla forza di ogni muscolo e alla sua lunghezza: oltre **1,5 m** un muscolo non si allunga più,
+  come una corda tesa (impedisce di "lanciare un'ancora" lontano e tirarsi dietro il corpo).
 
 ## Visualizzazione
 

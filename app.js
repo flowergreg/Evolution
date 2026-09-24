@@ -5,6 +5,7 @@ const STEP_SECONDS = 10;
 const EVAL_DT = 0.05;
 const GRAVITY = -9.81;
 const MAX_MUSCLE_FORCE = 160;
+const MAX_MUSCLE_LENGTH = 1.5; // oltre questa lunghezza (m) un muscolo non si allunga più, come una corda tesa
 const ENERGY_RAMP_SECONDS = 0.5; // i muscoli si caricano da 0 a 100% in questo tempo
 const AIR_DAMPING = 0.98;
 const MUSCLE_ENERGY = 100; // energia iniziale di ogni muscolo, uguale per tutti
@@ -86,7 +87,7 @@ function randomMuscle(from, to) {
   return {
     from,
     to,
-    restLength: rand(0.25, 1.7),
+    restLength: rand(0.25, MAX_MUSCLE_LENGTH),
     amplitude: rand(0.05, 0.55),
     frequency: rand(0.5, 3.0),
     phase: rand(0, Math.PI * 2),
@@ -163,7 +164,7 @@ function addNode(creature) {
     .slice(0, 2);
   nearest.forEach(({ i, d }) => {
     const muscle = randomMuscle(count, i);
-    muscle.restLength = clamp(d, 0.15, 2.4);
+    muscle.restLength = clamp(d, 0.15, MAX_MUSCLE_LENGTH);
     creature.muscles.push(muscle);
   });
   // Il limite di muscoli resta rispettato togliendone di vecchi a caso.
@@ -211,7 +212,7 @@ function mutateCreature(child) {
       const pairs = freePairs(child);
       if (pairs.length) [m.from, m.to] = pairs[randInt(0, pairs.length - 1)];
     }
-    m.restLength = mutateValue(m.restLength, 0.1, 0.15, 2.4);
+    m.restLength = mutateValue(m.restLength, 0.1, 0.15, MAX_MUSCLE_LENGTH);
     m.amplitude = mutateValue(m.amplitude, 0.06, 0.01, 0.8);
     m.frequency = mutateValue(m.frequency, 0.18, 0.2, 3.8);
     m.phase = (m.phase + rand(-0.35, 0.35) * k) % (Math.PI * 2);
@@ -304,7 +305,38 @@ function createSimState(creature) {
   return { nodes, muscles };
 }
 
+// Nessun muscolo può superare MAX_MUSCLE_LENGTH: i due nodi vengono riavvicinati
+// (di più il più leggero) e perdono la velocità con cui si stavano allontanando.
+// La correzione è ripetuta alcune volte, perché più muscoli possono tirare lo stesso nodo.
+function enforceMuscleLength(creature, state) {
+  for (let pass = 0; pass < 4; pass += 1) creature.muscles.forEach((m) => {
+    const a = state.nodes[m.from];
+    const b = state.nodes[m.to];
+    const dx = b.x - a.x;
+    const dy = b.y - a.y;
+    const dist = Math.hypot(dx, dy);
+    if (dist <= MAX_MUSCLE_LENGTH) return;
+    const ux = dx / dist;
+    const uy = dy / dist;
+    const shareA = b.mass / (a.mass + b.mass);
+    const shareB = a.mass / (a.mass + b.mass);
+    const excess = dist - MAX_MUSCLE_LENGTH;
+    a.x += ux * excess * shareA;
+    a.y += uy * excess * shareA;
+    b.x -= ux * excess * shareB;
+    b.y -= uy * excess * shareB;
+    const separating = (b.vx - a.vx) * ux + (b.vy - a.vy) * uy;
+    if (separating > 0) {
+      a.vx += ux * separating * shareA;
+      a.vy += uy * separating * shareA;
+      b.vx -= ux * separating * shareB;
+      b.vy -= uy * separating * shareB;
+    }
+  });
+}
+
 function stepPhysics(creature, state, t, dt) {
+  enforceMuscleLength(creature, state);
   const forces = state.nodes.map(() => ({ fx: 0, fy: GRAVITY }));
   // Carica graduale: impedisce il balzo iniziale dovuto allo scatto dei muscoli.
   const maxForce = MAX_MUSCLE_FORCE * Math.min(1, t / ENERGY_RAMP_SECONDS);
@@ -316,7 +348,7 @@ function stepPhysics(creature, state, t, dt) {
     const dx = b.x - a.x;
     const dy = b.y - a.y;
     const dist = Math.hypot(dx, dy) || 0.0001;
-    const target = m.restLength + m.amplitude * Math.sin(t * m.frequency * Math.PI * 2 + m.phase);
+    const target = Math.min(MAX_MUSCLE_LENGTH, m.restLength + m.amplitude * Math.sin(t * m.frequency * Math.PI * 2 + m.phase));
     // La spinta cala in proporzione all'energia rimasta; a energia 0 il muscolo non agisce più.
     const springMag = clamp(m.stiffness * (dist - target), -maxForce, maxForce) * (ms.energy / MUSCLE_ENERGY);
     const change = Math.abs(dist - ms.length);
