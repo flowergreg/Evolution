@@ -55,15 +55,13 @@ function clamp(v, min, max) {
   return Math.max(min, Math.min(max, v));
 }
 
+const MAX_MUSCLES = 28;
+
 function randomNode() {
-  return { x: rand(-0.4, 0.4), y: rand(0.7, 1.7), mass: rand(0.7, 1.4) };
+  return { x: rand(-1.2, 1.2), y: rand(0.7, 1.7), mass: rand(0.7, 1.4) };
 }
 
-function randomMuscle(nodeCount) {
-  const from = randInt(0, nodeCount - 1);
-  let to = randInt(0, nodeCount - 1);
-  while (to === from) to = randInt(0, nodeCount - 1);
-
+function randomMuscle(from, to) {
   return {
     from,
     to,
@@ -75,26 +73,80 @@ function randomMuscle(nodeCount) {
   };
 }
 
+const pairKey = (a, b) => (a < b ? `${a}-${b}` : `${b}-${a}`);
+
+// Coppie di nodi non ancora collegate: ogni coppia può avere al massimo un muscolo.
+function freePairs(creature) {
+  const used = new Set(creature.muscles.map((m) => pairKey(m.from, m.to)));
+  const pairs = [];
+  for (let a = 0; a < creature.nodes.length; a += 1) {
+    for (let b = a + 1; b < creature.nodes.length; b += 1) {
+      if (!used.has(pairKey(a, b))) pairs.push([a, b]);
+    }
+  }
+  return pairs;
+}
+
+function addRandomMuscle(creature) {
+  const pairs = freePairs(creature);
+  if (!pairs.length || creature.muscles.length >= MAX_MUSCLES) return false;
+  const [a, b] = pairs[randInt(0, pairs.length - 1)];
+  creature.muscles.push(randomMuscle(a, b));
+  return true;
+}
+
+// Ogni creatura ha almeno tanti muscoli quanti nodi (se le coppie libere lo permettono).
+function ensureMinMuscles(creature) {
+  while (creature.muscles.length < creature.nodes.length && addRandomMuscle(creature));
+}
+
+function removeDuplicateMuscles(creature) {
+  const seen = new Set();
+  creature.muscles = creature.muscles.filter((m) => {
+    const key = pairKey(m.from, m.to);
+    if (m.from === m.to || seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
 function createRandomCreature() {
   const nodeCount = randInt(3, 8);
-  const musclesCount = randInt(nodeCount + 1, nodeCount * 2 + 4);
-
-  return {
+  const creature = {
     nodes: Array.from({ length: nodeCount }, () => randomNode()),
-    muscles: Array.from({ length: musclesCount }, () => randomMuscle(nodeCount)),
+    muscles: [],
     distance: 0,
     evaluated: false,
     trace: null,
   };
+  const musclesCount = randInt(nodeCount + 1, nodeCount * 2 + 4);
+  for (let i = 0; i < musclesCount && addRandomMuscle(creature); i += 1);
+  return creature;
 }
 
+// Il nodo nuovo nasce vicino al corpo e collegato ai due nodi più vicini,
+// così forma un triangolo stabile invece di penzolare.
 function addNode(creature) {
-  creature.nodes.push(randomNode());
-  const newIndex = creature.nodes.length - 1;
-  const muscle = randomMuscle(creature.nodes.length);
-  muscle.from = newIndex;
-  muscle.to = randInt(0, newIndex - 1);
-  creature.muscles.push(muscle);
+  const count = creature.nodes.length;
+  const meanX = creature.nodes.reduce((sum, n) => sum + n.x, 0) / count;
+  const meanY = creature.nodes.reduce((sum, n) => sum + n.y, 0) / count;
+  const node = randomNode();
+  node.x = clamp(meanX + rand(-0.8, 0.8), -1.8, 1.8);
+  node.y = clamp(meanY + rand(-0.5, 0.5), 0.35, 2.4);
+  creature.nodes.push(node);
+
+  const nearest = creature.nodes
+    .slice(0, count)
+    .map((n, i) => ({ i, d: Math.hypot(n.x - node.x, n.y - node.y) }))
+    .sort((a, b) => a.d - b.d)
+    .slice(0, 2);
+  nearest.forEach(({ i, d }) => {
+    const muscle = randomMuscle(count, i);
+    muscle.restLength = clamp(d, 0.15, 2.4);
+    creature.muscles.push(muscle);
+  });
+  // Il limite di muscoli resta rispettato togliendone di vecchi a caso.
+  while (creature.muscles.length > MAX_MUSCLES) creature.muscles.splice(randInt(0, creature.muscles.length - 3), 1);
 }
 
 // Toglie un nodo e riaggancia i muscoli rimasti ai nodi giusti.
@@ -106,7 +158,7 @@ function removeNode(creature) {
     if (m.from > removed) m.from -= 1;
     if (m.to > removed) m.to -= 1;
   });
-  while (creature.muscles.length < creature.nodes.length) creature.muscles.push(randomMuscle(creature.nodes.length));
+  ensureMinMuscles(creature);
 }
 
 // A volte la mutazione è un salto ampio: aiuta a uscire dalle soluzioni mediocri.
@@ -120,7 +172,7 @@ function mutateCreature(child) {
 
   if (Math.random() < 0.15 * k && child.nodes.length < 10) addNode(child);
   if (Math.random() < 0.12 * k && child.nodes.length > 3) removeNode(child);
-  if (Math.random() < 0.3 * k && child.muscles.length < 28) child.muscles.push(randomMuscle(child.nodes.length));
+  if (Math.random() < 0.3 * k) addRandomMuscle(child);
   if (Math.random() < 0.2 * k && child.muscles.length > child.nodes.length) {
     child.muscles.splice(randInt(0, child.muscles.length - 1), 1);
   }
@@ -133,9 +185,9 @@ function mutateCreature(child) {
 
   child.muscles.forEach((m) => {
     if (Math.random() < 0.2 * k) {
-      m.from = randInt(0, child.nodes.length - 1);
-      m.to = randInt(0, child.nodes.length - 1);
-      if (m.to === m.from) m.to = (m.from + 1) % child.nodes.length;
+      // Ricollega il muscolo a una coppia di nodi ancora libera, se esiste.
+      const pairs = freePairs(child);
+      if (pairs.length) [m.from, m.to] = pairs[randInt(0, pairs.length - 1)];
     }
     m.restLength = mutateValue(m.restLength, 0.1, 0.15, 2.4);
     m.amplitude = mutateValue(m.amplitude, 0.06, 0.01, 0.8);
@@ -166,6 +218,8 @@ function crossover(parentA, parentB) {
     if (!other || Math.random() >= 0.5) return;
     if (other.from < child.nodes.length && other.to < child.nodes.length) Object.assign(m, other);
   });
+  removeDuplicateMuscles(child);
+  ensureMinMuscles(child);
   return child;
 }
 
@@ -186,9 +240,8 @@ function makeChild(survivors) {
 }
 
 function createSimState(creature) {
-  const baseX = 0;
-  const nodes = creature.nodes.map((n, i) => ({
-    x: baseX + i * 0.45 + n.x,
+  const nodes = creature.nodes.map((n) => ({
+    x: n.x,
     y: n.y,
     vx: 0,
     vy: 0,

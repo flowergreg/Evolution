@@ -10,6 +10,7 @@ Piccola web app in JavaScript vanilla che simula, in modo didattico, una selezio
   - muscoli che collegano coppie di nodi e si comportano come molle oscillanti
     (lunghezza a riposo, ampiezza, frequenza, fase, rigidità);
   - ogni nodo può essere collegato a **più muscoli** (grafo generale, non solo catena).
+  - ogni coppia di nodi può avere **al massimo un muscolo** (con 3 nodi, al massimo 3 muscoli).
 - Fitness: **metri percorsi in 10 secondi** dal baricentro della creatura.
 - A ogni ciclo:
   - sopravvivono le **500** creature che hanno percorso più strada;
@@ -17,7 +18,7 @@ Piccola web app in JavaScript vanilla che simula, in modo didattico, una selezio
     e vince la migliore), quindi le creature più veloci hanno in media più figli;
   - circa il 30% dei figli nasce dall'incrocio di due genitori;
   - ogni figlio riceve mutazioni: piccole variazioni, con occasionali salti ampi, e a volte
-    aggiunta o rimozione di nodi e muscoli;
+    aggiunta o rimozione di nodi e muscoli (un nodo nuovo nasce vicino al corpo, collegato ai due nodi più vicini);
   - la popolazione torna a 1000.
 
 ## Fisica semplificata
