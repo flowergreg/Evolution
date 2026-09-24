@@ -28,6 +28,7 @@ Piccola web app in JavaScript vanilla che simula, in modo didattico, una selezio
   Per avanzare una creatura deve quindi coordinare i muscoli in modo da spingere con i nodi appoggiati.
 - **Energia dei muscoli:** ogni muscolo parte con 100 di energia, uguale per tutti e non soggetta a mutazioni.
   Il lavoro compiuto la consuma e la spinta cala in proporzione; a energia 0 il muscolo non agisce più.
+  L'energia si ricarica di 10 al secondo (fino a 100): conviene un'andatura economica e regolare, non uno scatto iniziale.
 - All'avvio i muscoli si caricano gradualmente, da 0 a 100% della forza in 0,5 secondi:
   così le creature non possono avanzare con un unico balzo iniziale e devono camminare.
 - Limite alla forza di ogni muscolo.

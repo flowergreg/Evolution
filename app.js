@@ -7,6 +7,7 @@ const MAX_MUSCLE_FORCE = 160;
 const ENERGY_RAMP_SECONDS = 0.5; // i muscoli si caricano da 0 a 100% in questo tempo
 const AIR_DAMPING = 0.98;
 const MUSCLE_ENERGY = 100; // energia iniziale di ogni muscolo, uguale per tutti
+const ENERGY_RECHARGE = 10; // energia recuperata da ogni muscolo al secondo (fino a 100)
 const ENERGY_COST = 0.1; // energia consumata per unità di lavoro (forza × accorciamento/allungamento)
 const MAX_WORLD_X = 150;
 const MAX_WORLD_Y = 8;
@@ -272,7 +273,8 @@ function stepPhysics(creature, state, t, dt) {
     const target = m.restLength + m.amplitude * Math.sin(t * m.frequency * Math.PI * 2 + m.phase);
     // La spinta cala in proporzione all'energia rimasta; a energia 0 il muscolo non agisce più.
     const springMag = clamp(m.stiffness * (dist - target), -maxForce, maxForce) * (ms.energy / MUSCLE_ENERGY);
-    ms.energy = Math.max(0, ms.energy - Math.abs(springMag * (dist - ms.length)) * ENERGY_COST);
+    const spent = Math.abs(springMag * (dist - ms.length)) * ENERGY_COST;
+    ms.energy = clamp(ms.energy - spent + ENERGY_RECHARGE * dt, 0, MUSCLE_ENERGY);
     ms.length = dist;
     const dirX = dx / dist;
     const dirY = dy / dist;
