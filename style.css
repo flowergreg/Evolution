@@ -80,6 +80,10 @@ canvas {
   background: #0b1020;
 }
 
+.stats .species {
+  grid-column: 1 / -1;
+}
+
 .worlds {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));

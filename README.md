@@ -15,10 +15,12 @@ Piccola web app in JavaScript vanilla che simula, in modo didattico, una selezio
 - A ogni ciclo:
   - ogni distanza viene moltiplicata per un fattore di **fortuna** casuale fra 0,5 e 1
     (selezione del "buono abbastanza", non solo del migliore);
-  - sopravvivono le **500** creature con il punteggio (distanza × fortuna) più alto;
+  - le creature sono divise in **specie** secondo il numero di nodi; ogni specie conserva
+    almeno le sue **40** migliori (o tutte, se sono meno), così i corpi complessi hanno tempo di maturare;
+  - i posti rimasti, fino a **500** sopravvissute, vanno alle creature con il punteggio (distanza × fortuna) più alto;
   - nascono 500 figli; ogni genitore è scelto con un piccolo torneo (si estraggono due sopravvissute
     e vince quella con il punteggio più alto), quindi le creature più veloci hanno in media più figli;
-  - circa il 30% dei figli nasce dall'incrocio di due genitori;
+  - circa il 30% dei figli nasce dall'incrocio di due genitori della stessa specie;
   - ogni figlio riceve mutazioni: piccole variazioni, con occasionali salti ampi, e a volte
     aggiunta o rimozione di nodi e muscoli (un nodo nuovo nasce vicino al corpo, collegato ai due nodi più vicini);
   - la popolazione torna a 1000.
@@ -42,6 +44,7 @@ Piccola web app in JavaScript vanilla che simula, in modo didattico, una selezio
   - i muscoli sbiadiscono man mano che consumano energia.
 - Pavimento con segnalatori metrici per percepire la velocità.
 - Grafico della distanza massima e media per ciclo.
+- Riepilogo delle specie: numero di creature e record di distanza per ogni numero di nodi.
 - Avanzamento manuale o automatico, con pausa regolabile tra un ciclo e l'altro.
 - Cursore "Intensità mutazioni" (da ×0 a ×3) per regolare la variabilità durante la simulazione.
 

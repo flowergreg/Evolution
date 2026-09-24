@@ -1,5 +1,6 @@
 const POPULATION_SIZE = 1000;
 const SURVIVORS = 500;
+const SPECIES_QUOTA = 40; // sopravvissuti garantiti a ogni specie (creature con lo stesso numero di nodi)
 const STEP_SECONDS = 10;
 const EVAL_DT = 0.05;
 const GRAVITY = -9.81;
@@ -234,12 +235,38 @@ function pickParent(survivors) {
   return survivors[best];
 }
 
-function makeChild(survivors) {
+// Il secondo genitore di un incrocio è della stessa specie del primo:
+// mescolare corpi con un numero diverso di nodi darebbe figli poco sensati.
+function makeChild(survivors, species) {
   const parentA = pickParent(survivors);
   const child = Math.random() < EVOLUTION.crossoverRate
-    ? crossover(parentA, pickParent(survivors))
+    ? crossover(parentA, pickParent(species.get(parentA.nodes.length)))
     : copyCreature(parentA);
   return mutateCreature(child);
+}
+
+function groupBySpecies(creatures) {
+  const species = new Map();
+  creatures.forEach((c) => {
+    const key = c.nodes.length;
+    if (!species.has(key)) species.set(key, []);
+    species.get(key).push(c);
+  });
+  return species;
+}
+
+// Ogni specie conserva le sue migliori SPECIES_QUOTA creature (o tutte, se sono meno);
+// i posti rimasti vanno alle migliori in assoluto. Le liste sono ordinate per punteggio.
+function selectSurvivors(ranked) {
+  const chosen = new Set();
+  groupBySpecies(ranked).forEach((members) => {
+    members.slice(0, SPECIES_QUOTA).forEach((c) => chosen.add(c));
+  });
+  for (const c of ranked) {
+    if (chosen.size >= SURVIVORS) break;
+    chosen.add(c);
+  }
+  return ranked.filter((c) => chosen.has(c));
 }
 
 function createSimState(creature) {
@@ -363,8 +390,10 @@ function evolveOnce() {
   population.forEach((c) => {
     c.score = c.distance * rand(EVOLUTION.luckMin, 1);
   });
-  const survivors = [...population].sort((a, b) => b.score - a.score).slice(0, SURVIVORS);
-  const children = Array.from({ length: POPULATION_SIZE - SURVIVORS }, () => makeChild(survivors));
+  const ranked = [...population].sort((a, b) => b.score - a.score);
+  const survivors = selectSurvivors(ranked);
+  const species = groupBySpecies(survivors);
+  const children = Array.from({ length: POPULATION_SIZE - survivors.length }, () => makeChild(survivors, species));
   population = survivors.concat(children);
   evaluatePopulation();
   renderAll();
@@ -513,6 +542,13 @@ function drawCreatureFrame(ctx, canvas, creature, color, label) {
   ctx.fillText(`Distanza in 10s: ${creature.distance.toFixed(2)} m`, 8, 32);
 }
 
+function speciesSummary() {
+  return [...groupBySpecies(population)]
+    .sort(([a], [b]) => a - b)
+    .map(([nodes, members]) => `${nodes}: ${members.length}, ${Math.max(...members.map((c) => c.distance)).toFixed(1)} m`)
+    .join(' · ');
+}
+
 function renderStats() {
   const best = population[0];
   const avgDistance = population.reduce((sum, c) => sum + c.distance, 0) / population.length;
@@ -525,6 +561,7 @@ function renderStats() {
     <div><strong>Distanza max:</strong> ${best.distance.toFixed(2)} m</div>
     <div><strong>Distanza media:</strong> ${avgDistance.toFixed(2)} m</div>
     <div><strong>Distanza mediana:</strong> ${median.distance.toFixed(2)} m</div>
+    <div class="species"><strong>Specie (nodi: creature, record):</strong> ${speciesSummary()}</div>
   `;
 }
 
