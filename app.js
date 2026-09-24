@@ -10,12 +10,23 @@ const MAX_SPEED = 6;
 const MAX_WORLD_X = 150;
 const MAX_WORLD_Y = 8;
 
+// Parametri dell'evoluzione.
+const EVOLUTION = {
+  mutationStrength: 1, // moltiplica ampiezza e frequenza delle mutazioni (regolabile dalla pagina)
+  bigJumpChance: 0.1, // probabilità che una mutazione sia un salto ampio
+  bigJumpScale: 5,
+  tournamentSize: 2, // sfidanti estratti per scegliere ogni genitore
+  crossoverRate: 0.3, // quota di figli nati da due genitori
+};
+
 const statsEl = document.getElementById('stats');
 const resetBtn = document.getElementById('resetBtn');
 const stepBtn = document.getElementById('stepBtn');
 const autoBtn = document.getElementById('autoBtn');
 const autoSpeedInput = document.getElementById('autoSpeed');
 const autoSpeedLabel = document.getElementById('autoSpeedLabel');
+const mutationInput = document.getElementById('mutationStrength');
+const mutationLabel = document.getElementById('mutationLabel');
 
 const chartCanvas = document.getElementById('chartCanvas');
 const chartCtx = chartCanvas.getContext('2d');
@@ -97,37 +108,80 @@ function removeNode(creature) {
   while (creature.muscles.length < creature.nodes.length) creature.muscles.push(randomMuscle(creature.nodes.length));
 }
 
-function mutateCreature(parent) {
-  const child = structuredClone({ ...parent, trace: null });
+// A volte la mutazione è un salto ampio: aiuta a uscire dalle soluzioni mediocri.
+function mutateValue(value, step, min, max) {
+  const jump = Math.random() < EVOLUTION.bigJumpChance ? EVOLUTION.bigJumpScale : 1;
+  return clamp(value + rand(-step, step) * jump * EVOLUTION.mutationStrength, min, max);
+}
 
-  if (Math.random() < 0.15 && child.nodes.length < 10) addNode(child);
-  if (Math.random() < 0.12 && child.nodes.length > 3) removeNode(child);
+function mutateCreature(child) {
+  const k = EVOLUTION.mutationStrength;
 
-  if (Math.random() < 0.3 && child.muscles.length < 28) child.muscles.push(randomMuscle(child.nodes.length));
-  if (Math.random() < 0.2 && child.muscles.length > child.nodes.length) child.muscles.splice(randInt(0, child.muscles.length - 1), 1);
+  if (Math.random() < 0.15 * k && child.nodes.length < 10) addNode(child);
+  if (Math.random() < 0.12 * k && child.nodes.length > 3) removeNode(child);
+  if (Math.random() < 0.3 * k && child.muscles.length < 28) child.muscles.push(randomMuscle(child.nodes.length));
+  if (Math.random() < 0.2 * k && child.muscles.length > child.nodes.length) {
+    child.muscles.splice(randInt(0, child.muscles.length - 1), 1);
+  }
 
   child.nodes.forEach((n) => {
-    n.x = clamp(n.x + rand(-0.12, 0.12), -1.8, 1.8);
-    n.y = clamp(n.y + rand(-0.12, 0.12), 0.35, 2.4);
-    n.mass = clamp(n.mass + rand(-0.08, 0.08), 0.5, 2.0);
+    n.x = mutateValue(n.x, 0.12, -1.8, 1.8);
+    n.y = mutateValue(n.y, 0.12, 0.35, 2.4);
+    n.mass = mutateValue(n.mass, 0.08, 0.5, 2.0);
   });
 
   child.muscles.forEach((m) => {
-    if (Math.random() < 0.2) {
+    if (Math.random() < 0.2 * k) {
       m.from = randInt(0, child.nodes.length - 1);
       m.to = randInt(0, child.nodes.length - 1);
       if (m.to === m.from) m.to = (m.from + 1) % child.nodes.length;
     }
-    m.restLength = clamp(m.restLength + rand(-0.10, 0.10), 0.15, 2.4);
-    m.amplitude = clamp(m.amplitude + rand(-0.06, 0.06), 0.01, 0.8);
-    m.frequency = clamp(m.frequency + rand(-0.18, 0.18), 0.2, 3.8);
-    m.phase = (m.phase + rand(-0.35, 0.35)) % (Math.PI * 2);
-    m.stiffness = clamp(m.stiffness + rand(-8, 8), 8, 140);
+    m.restLength = mutateValue(m.restLength, 0.1, 0.15, 2.4);
+    m.amplitude = mutateValue(m.amplitude, 0.06, 0.01, 0.8);
+    m.frequency = mutateValue(m.frequency, 0.18, 0.2, 3.8);
+    m.phase = (m.phase + rand(-0.35, 0.35) * k) % (Math.PI * 2);
+    m.stiffness = mutateValue(m.stiffness, 8, 8, 140);
   });
 
   child.distance = 0;
   child.evaluated = false;
   return child;
+}
+
+function copyCreature(parent) {
+  return structuredClone({ ...parent, trace: null });
+}
+
+// Incrocio: il figlio ha il corpo del primo genitore; ogni nodo e muscolo
+// che esiste anche nel secondo genitore viene preso a caso dall'uno o dall'altro.
+function crossover(parentA, parentB) {
+  const child = copyCreature(parentA);
+  child.nodes.forEach((n, i) => {
+    const other = parentB.nodes[i];
+    if (other && Math.random() < 0.5) Object.assign(n, other);
+  });
+  child.muscles.forEach((m, i) => {
+    const other = parentB.muscles[i];
+    if (!other || Math.random() >= 0.5) return;
+    if (other.from < child.nodes.length && other.to < child.nodes.length) Object.assign(m, other);
+  });
+  return child;
+}
+
+// Torneo: si estraggono alcune sopravvissute a caso e vince la migliore.
+// La popolazione è ordinata per distanza, quindi vince l'indice più basso.
+function pickParent(survivors) {
+  let best = randInt(0, survivors.length - 1);
+  for (let i = 1; i < EVOLUTION.tournamentSize; i += 1) best = Math.min(best, randInt(0, survivors.length - 1));
+  return survivors[best];
+}
+
+function makeChild(survivors) {
+  const parentA = pickParent(survivors);
+  const child = Math.random() < EVOLUTION.crossoverRate
+    ? crossover(parentA, pickParent(survivors))
+    : copyCreature(parentA);
+  return mutateCreature(child);
 }
 
 function createSimState(creature) {
@@ -234,7 +288,7 @@ function evaluatePopulation() {
 function evolveOnce() {
   generation += 1;
   const survivors = population.slice(0, SURVIVORS);
-  const children = survivors.map((p) => mutateCreature(p));
+  const children = Array.from({ length: POPULATION_SIZE - SURVIVORS }, () => makeChild(survivors));
   population = survivors.concat(children);
   evaluatePopulation();
   renderAll();
@@ -438,6 +492,14 @@ autoSpeedInput.addEventListener('input', () => {
   if (autoRunning) startAuto();
 });
 
+function updateMutation() {
+  EVOLUTION.mutationStrength = Number(mutationInput.value);
+  mutationLabel.textContent = `×${EVOLUTION.mutationStrength.toFixed(1)}`;
+}
+
+mutationInput.addEventListener('input', updateMutation);
+
 updateAutoLabel();
+updateMutation();
 resetSimulation();
 animateWorlds();

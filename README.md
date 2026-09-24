@@ -13,7 +13,11 @@ Piccola web app in JavaScript vanilla che simula, in modo didattico, una selezio
 - Fitness: **metri percorsi in 10 secondi** dal baricentro della creatura.
 - A ogni ciclo:
   - sopravvivono le **500** creature che hanno percorso più strada;
-  - ciascuna genera 1 figlio con piccole mutazioni (anche aggiunta o rimozione di nodi e muscoli);
+  - nascono 500 figli; ogni genitore è scelto con un piccolo torneo (si estraggono due sopravvissute
+    e vince la migliore), quindi le creature più veloci hanno in media più figli;
+  - circa il 30% dei figli nasce dall'incrocio di due genitori;
+  - ogni figlio riceve mutazioni: piccole variazioni, con occasionali salti ampi, e a volte
+    aggiunta o rimozione di nodi e muscoli;
   - la popolazione torna a 1000.
 
 ## Fisica semplificata
@@ -29,6 +33,7 @@ Piccola web app in JavaScript vanilla che simula, in modo didattico, una selezio
 - Pavimento con segnalatori metrici per percepire la velocità.
 - Grafico della distanza massima e media per ciclo.
 - Avanzamento manuale o automatico, con pausa regolabile tra un ciclo e l'altro.
+- Cursore "Intensità mutazioni" (da ×0 a ×3) per regolare la variabilità durante la simulazione.
 
 ## Avvio
 

@@ -11,7 +11,7 @@
       <header>
         <h1>Simulatore semplificato di selezione naturale</h1>
         <p>
-          1000 creature casuali → selezione delle migliori 500 → 500 figli mutati.
+          1000 creature casuali → sopravvivono le migliori 500 → 500 figli, con mutazioni e incroci.
         </p>
       </header>
 
@@ -25,6 +25,11 @@
             <input id="autoSpeed" type="range" min="0" max="1500" value="200" step="50" />
           </label>
           <span id="autoSpeedLabel">350 ms</span>
+          <label>
+            Intensità mutazioni
+            <input id="mutationStrength" type="range" min="0" max="3" value="1" step="0.1" />
+          </label>
+          <span id="mutationLabel">×1.0</span>
         </div>
         <div class="stats" id="stats"></div>
       </section>
