@@ -3,17 +3,20 @@ const SURVIVORS = 500;
 const SPECIES_QUOTA = 40; // sopravvissuti garantiti a ogni specie (creature con lo stesso numero di nodi)
 const STEP_SECONDS = 10;
 const EVAL_DT = 0.05;
-const GRAVITY = -9.81;
-const MAX_MUSCLE_FORCE = 160;
-const MAX_MUSCLE_LENGTH = 1.5; // oltre questa lunghezza (m) un muscolo non si allunga più, come una corda tesa
-const ENERGY_RAMP_SECONDS = 0.5; // i muscoli si caricano da 0 a 100% in questo tempo
-const AIR_DAMPING = 0.98;
-const MUSCLE_ENERGY = 100; // energia iniziale di ogni muscolo, uguale per tutti
-const ENERGY_RECHARGE = 10; // energia recuperata da ogni muscolo al secondo (fino a 100)
-const ENERGY_COST = 0.1; // energia consumata per unità di lavoro (forza × accorciamento/allungamento)
-// Velocità del muscolo (m/s) a cui il costo è quello base: un muscolo due volte più rapido
-// consuma il doppio per lo stesso lavoro, uno lento la metà. Così la corsa costa molto più del passo.
-const ENERGY_SPEED_REF = 0.5;
+// Parametri ambientali, modificabili dalla pagina.
+const PHYSICS = {
+  gravity: 9.81, // m/s²
+  airDrag: 0.02, // quota di velocità persa per l'aria a ogni passo di 0,05 s
+  maxMuscleForce: 160, // forza massima di un muscolo
+  maxMuscleLength: 1.5, // oltre questa lunghezza (m) un muscolo non si allunga più, come una corda tesa
+  energyRamp: 0.5, // secondi in cui i muscoli si caricano da 0 a 100% alla partenza
+  muscleEnergy: 100, // energia iniziale di ogni muscolo, uguale per tutti
+  energyRecharge: 10, // energia recuperata da ogni muscolo al secondo (fino all'energia iniziale)
+  energyCost: 0.1, // energia consumata per unità di lavoro (forza × accorciamento/allungamento)
+  // Velocità del muscolo (m/s) a cui il costo è quello base: un muscolo due volte più rapido
+  // consuma il doppio per lo stesso lavoro, uno lento la metà. Così la corsa costa molto più del passo.
+  energySpeedRef: 0.5,
+};
 const MAX_WORLD_X = 150;
 const MAX_WORLD_Y = 8;
 const OBSTACLE_START_X = 2.5; // il primo ostacolo comincia qui (le creature partono intorno a 0)
@@ -47,9 +50,20 @@ const autoSpeedInput = document.getElementById('autoSpeed');
 const autoSpeedLabel = document.getElementById('autoSpeedLabel');
 const mutationInput = document.getElementById('mutationStrength');
 const mutationLabel = document.getElementById('mutationLabel');
-const obstacleHeightInput = document.getElementById('obstacleHeight');
-const obstacleWidthInput = document.getElementById('obstacleWidth');
-const obstacleGapInput = document.getElementById('obstacleGap');
+const envInputs = [...document.querySelectorAll('[data-env]')];
+const envResetBtn = document.getElementById('envResetBtn');
+const speciesCanvas = document.getElementById('speciesCanvas');
+const speciesCtx = speciesCanvas.getContext('2d');
+const speciesLegend = document.getElementById('speciesLegend');
+const speciesTooltip = document.getElementById('speciesTooltip');
+
+// Un colore fisso per ogni specie (numero di nodi da 3 a 10), validato per il daltonismo
+// sullo sfondo scuro dei grafici.
+const SPECIES_COLORS = {
+  3: '#3987e5', 4: '#d95926', 5: '#199e70', 6: '#c98500',
+  7: '#d55181', 8: '#008300', 9: '#9085e9', 10: '#e66767',
+};
+const SPECIES_KEYS = Object.keys(SPECIES_COLORS).map(Number);
 
 const chartCanvas = document.getElementById('chartCanvas');
 const chartCtx = chartCanvas.getContext('2d');
@@ -87,7 +101,7 @@ function randomMuscle(from, to) {
   return {
     from,
     to,
-    restLength: rand(0.25, MAX_MUSCLE_LENGTH),
+    restLength: rand(0.25, PHYSICS.maxMuscleLength),
     amplitude: rand(0.05, 0.55),
     frequency: rand(0.5, 3.0),
     phase: rand(0, Math.PI * 2),
@@ -164,7 +178,7 @@ function addNode(creature) {
     .slice(0, 2);
   nearest.forEach(({ i, d }) => {
     const muscle = randomMuscle(count, i);
-    muscle.restLength = clamp(d, 0.15, MAX_MUSCLE_LENGTH);
+    muscle.restLength = clamp(d, 0.15, PHYSICS.maxMuscleLength);
     creature.muscles.push(muscle);
   });
   // Il limite di muscoli resta rispettato togliendone di vecchi a caso.
@@ -212,7 +226,7 @@ function mutateCreature(child) {
       const pairs = freePairs(child);
       if (pairs.length) [m.from, m.to] = pairs[randInt(0, pairs.length - 1)];
     }
-    m.restLength = mutateValue(m.restLength, 0.1, 0.15, MAX_MUSCLE_LENGTH);
+    m.restLength = mutateValue(m.restLength, 0.1, 0.15, PHYSICS.maxMuscleLength);
     m.amplitude = mutateValue(m.amplitude, 0.06, 0.01, 0.8);
     m.frequency = mutateValue(m.frequency, 0.18, 0.2, 3.8);
     m.phase = (m.phase + rand(-0.35, 0.35) * k) % (Math.PI * 2);
@@ -299,13 +313,13 @@ function createSimState(creature) {
     grounded: false,
   }));
   const muscles = creature.muscles.map((m) => ({
-    energy: MUSCLE_ENERGY,
+    energy: PHYSICS.muscleEnergy,
     length: Math.hypot(nodes[m.to].x - nodes[m.from].x, nodes[m.to].y - nodes[m.from].y),
   }));
   return { nodes, muscles };
 }
 
-// Nessun muscolo può superare MAX_MUSCLE_LENGTH: i due nodi vengono riavvicinati
+// Nessun muscolo può superare PHYSICS.maxMuscleLength: i due nodi vengono riavvicinati
 // (di più il più leggero) e perdono la velocità con cui si stavano allontanando.
 // La correzione è ripetuta alcune volte, perché più muscoli possono tirare lo stesso nodo.
 function enforceMuscleLength(creature, state) {
@@ -315,12 +329,12 @@ function enforceMuscleLength(creature, state) {
     const dx = b.x - a.x;
     const dy = b.y - a.y;
     const dist = Math.hypot(dx, dy);
-    if (dist <= MAX_MUSCLE_LENGTH) return;
+    if (dist <= PHYSICS.maxMuscleLength) return;
     const ux = dx / dist;
     const uy = dy / dist;
     const shareA = b.mass / (a.mass + b.mass);
     const shareB = a.mass / (a.mass + b.mass);
-    const excess = dist - MAX_MUSCLE_LENGTH;
+    const excess = dist - PHYSICS.maxMuscleLength;
     a.x += ux * excess * shareA;
     a.y += uy * excess * shareA;
     b.x -= ux * excess * shareB;
@@ -337,9 +351,9 @@ function enforceMuscleLength(creature, state) {
 
 function stepPhysics(creature, state, t, dt) {
   enforceMuscleLength(creature, state);
-  const forces = state.nodes.map(() => ({ fx: 0, fy: GRAVITY }));
+  const forces = state.nodes.map(() => ({ fx: 0, fy: -PHYSICS.gravity }));
   // Carica graduale: impedisce il balzo iniziale dovuto allo scatto dei muscoli.
-  const maxForce = MAX_MUSCLE_FORCE * Math.min(1, t / ENERGY_RAMP_SECONDS);
+  const maxForce = PHYSICS.maxMuscleForce * (PHYSICS.energyRamp > 0 ? Math.min(1, t / PHYSICS.energyRamp) : 1);
 
   creature.muscles.forEach((m, i) => {
     const ms = state.muscles[i];
@@ -348,12 +362,12 @@ function stepPhysics(creature, state, t, dt) {
     const dx = b.x - a.x;
     const dy = b.y - a.y;
     const dist = Math.hypot(dx, dy) || 0.0001;
-    const target = Math.min(MAX_MUSCLE_LENGTH, m.restLength + m.amplitude * Math.sin(t * m.frequency * Math.PI * 2 + m.phase));
+    const target = Math.min(PHYSICS.maxMuscleLength, m.restLength + m.amplitude * Math.sin(t * m.frequency * Math.PI * 2 + m.phase));
     // La spinta cala in proporzione all'energia rimasta; a energia 0 il muscolo non agisce più.
-    const springMag = clamp(m.stiffness * (dist - target), -maxForce, maxForce) * (ms.energy / MUSCLE_ENERGY);
+    const springMag = clamp(m.stiffness * (dist - target), -maxForce, maxForce) * (ms.energy / PHYSICS.muscleEnergy);
     const change = Math.abs(dist - ms.length);
-    const spent = Math.abs(springMag) * change * ENERGY_COST * (change / dt / ENERGY_SPEED_REF);
-    ms.energy = clamp(ms.energy - spent + ENERGY_RECHARGE * dt, 0, MUSCLE_ENERGY);
+    const spent = Math.abs(springMag) * change * PHYSICS.energyCost * (change / dt / PHYSICS.energySpeedRef);
+    ms.energy = clamp(ms.energy - spent + PHYSICS.energyRecharge * dt, 0, PHYSICS.muscleEnergy);
     ms.length = dist;
     const dirX = dx / dist;
     const dirY = dy / dist;
@@ -368,8 +382,8 @@ function stepPhysics(creature, state, t, dt) {
     const ax = forces[i].fx / n.mass;
     const ay = forces[i].fy / n.mass;
 
-    n.vx = (n.vx + ax * dt) * AIR_DAMPING;
-    n.vy = (n.vy + ay * dt) * AIR_DAMPING;
+    n.vx = (n.vx + ax * dt) * (1 - PHYSICS.airDrag);
+    n.vy = (n.vy + ay * dt) * (1 - PHYSICS.airDrag);
 
     const prevX = n.x;
     const prevY = n.y;
@@ -442,7 +456,11 @@ function evaluatePopulation() {
 
   const best = population[0].distance;
   const avg = population.reduce((sum, c) => sum + c.distance, 0) / population.length;
-  history.push({ generation, best, avg });
+  const species = {};
+  population.forEach((c) => {
+    species[c.nodes.length] = (species[c.nodes.length] || 0) + 1;
+  });
+  history.push({ generation, best, avg, species });
 
   const bestTrace = simulateCreature(population[0], STEP_SECONDS, EVAL_DT, true);
   population[0].trace = bestTrace.frames;
@@ -514,6 +532,112 @@ function drawChart() {
   chartCtx.fillStyle = '#38bdf8';
   chartCtx.fillText('■ media', pad + 64, pad + 14);
 }
+
+function renderSpeciesLegend() {
+  speciesLegend.innerHTML = SPECIES_KEYS
+    .map((k) => `<span><i style="background:${SPECIES_COLORS[k]}"></i>${k} nodi</span>`)
+    .join('');
+}
+
+// Aree impilate al 100%: per ogni ciclo, la quota di ciascuna specie sulla popolazione.
+function drawSpeciesChart(hoverIndex = null) {
+  const { width, height } = speciesCanvas;
+  const ctx = speciesCtx;
+  const surface = '#0b1020';
+  ctx.clearRect(0, 0, width, height);
+  ctx.fillStyle = surface;
+  ctx.fillRect(0, 0, width, height);
+
+  const pad = { left: 44, right: 16, top: 12, bottom: 28 };
+  const plotW = width - pad.left - pad.right;
+  const plotH = height - pad.top - pad.bottom;
+  const n = history.length;
+  const xScale = (i) => pad.left + (n > 1 ? (i / (n - 1)) * plotW : plotW / 2);
+  const yScale = (share) => pad.top + plotH - share * plotH;
+
+  // Griglia e assi, recessivi.
+  ctx.font = '12px sans-serif';
+  ctx.fillStyle = '#94a3b8';
+  ctx.strokeStyle = '#1e293b';
+  ctx.lineWidth = 1;
+  [0, 0.25, 0.5, 0.75, 1].forEach((v) => {
+    const y = yScale(v);
+    ctx.beginPath();
+    ctx.moveTo(pad.left, y);
+    ctx.lineTo(pad.left + plotW, y);
+    ctx.stroke();
+    ctx.fillText(`${v * 100}%`, 6, y + 4);
+  });
+  if (!n) return;
+  ctx.fillText(`ciclo ${history[0].generation}`, pad.left, height - 8);
+  const lastLabel = `ciclo ${history[n - 1].generation}`;
+  ctx.fillText(lastLabel, pad.left + plotW - ctx.measureText(lastLabel).width, height - 8);
+
+  // Quote cumulate, dalla specie a 3 nodi (in basso) a quella a 10 (in alto).
+  const shares = history.map((h) => {
+    const total = SPECIES_KEYS.reduce((sum, k) => sum + (h.species[k] || 0), 0) || 1;
+    let acc = 0;
+    return SPECIES_KEYS.map((k) => {
+      const low = acc;
+      acc += (h.species[k] || 0) / total;
+      return [low, acc];
+    });
+  });
+
+  const xs = n > 1 ? history.map((_, i) => xScale(i)) : [pad.left, pad.left + plotW];
+  const rows = n > 1 ? shares : [shares[0], shares[0]];
+  SPECIES_KEYS.forEach((k, s) => {
+    ctx.beginPath();
+    rows.forEach((r, i) => (i === 0 ? ctx.moveTo(xs[i], yScale(r[s][1])) : ctx.lineTo(xs[i], yScale(r[s][1]))));
+    for (let i = rows.length - 1; i >= 0; i -= 1) ctx.lineTo(xs[i], yScale(rows[i][s][0]));
+    ctx.closePath();
+    ctx.fillStyle = SPECIES_COLORS[k];
+    ctx.fill();
+  });
+
+  // Sottile separazione color sfondo fra una fascia e l'altra.
+  ctx.strokeStyle = surface;
+  ctx.lineWidth = 2;
+  SPECIES_KEYS.slice(0, -1).forEach((_, s) => {
+    ctx.beginPath();
+    rows.forEach((r, i) => (i === 0 ? ctx.moveTo(xs[i], yScale(r[s][1])) : ctx.lineTo(xs[i], yScale(r[s][1]))));
+    ctx.stroke();
+  });
+
+  if (hoverIndex !== null && n > 1) {
+    const x = xScale(hoverIndex);
+    ctx.strokeStyle = '#e5e7eb';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(x, pad.top);
+    ctx.lineTo(x, pad.top + plotH);
+    ctx.stroke();
+  }
+}
+
+// Passando il mouse sul grafico: linea verticale e riquadro con le percentuali del ciclo.
+speciesCanvas.addEventListener('mousemove', (event) => {
+  const n = history.length;
+  if (n < 2) return;
+  const rect = speciesCanvas.getBoundingClientRect();
+  const x = ((event.clientX - rect.left) / rect.width) * speciesCanvas.width;
+  const plotW = speciesCanvas.width - 44 - 16;
+  const index = Math.round(clamp((x - 44) / plotW, 0, 1) * (n - 1));
+  const h = history[index];
+  const total = SPECIES_KEYS.reduce((sum, k) => sum + (h.species[k] || 0), 0) || 1;
+  drawSpeciesChart(index);
+  speciesTooltip.innerHTML = `<strong>Ciclo ${h.generation}</strong><br>` + SPECIES_KEYS.slice().reverse()
+    .map((k) => `<i style="background:${SPECIES_COLORS[k]}"></i>${k} nodi: ${(((h.species[k] || 0) / total) * 100).toFixed(1)}%`)
+    .join('<br>');
+  speciesTooltip.hidden = false;
+  const left = event.clientX - rect.left;
+  speciesTooltip.style.left = left > rect.width / 2 ? `${left - speciesTooltip.offsetWidth - 12}px` : `${left + 12}px`;
+});
+
+speciesCanvas.addEventListener('mouseleave', () => {
+  speciesTooltip.hidden = true;
+  drawSpeciesChart();
+});
 
 function drawGround(ctx, width, height, cameraX) {
   const groundY = height - 42;
@@ -589,7 +713,7 @@ function drawCreatureFrame(ctx, canvas, creature, color, label) {
     const a = frame.nodes[m.from];
     const b = frame.nodes[m.to];
     if (!a || !b) return;
-    ctx.globalAlpha = 0.15 + 0.85 * (frame.energy[i] / MUSCLE_ENERGY);
+    ctx.globalAlpha = 0.15 + 0.85 * (frame.energy[i] / PHYSICS.muscleEnergy);
     ctx.beginPath();
     ctx.moveTo(toCanvasX(a.x), toCanvasY(a.y));
     ctx.lineTo(toCanvasX(b.x), toCanvasY(b.y));
@@ -650,6 +774,7 @@ function renderStats() {
 
 function renderAll() {
   drawChart();
+  drawSpeciesChart();
   renderStats();
   const best = population[0];
   const median = population[Math.floor(population.length / 2)];
@@ -713,21 +838,32 @@ function updateMutation() {
 
 mutationInput.addEventListener('input', updateMutation);
 
-// Cambiando gli ostacoli tutte le creature vanno rivalutate: vale dal ciclo successivo.
-function updateTerrain() {
-  const read = (input, min, max) => clamp(Number(input.value) || 0, min, max);
-  TERRAIN.height = read(obstacleHeightInput, 0, 1);
-  TERRAIN.width = read(obstacleWidthInput, 0.05, 3);
-  TERRAIN.gap = read(obstacleGapInput, 0.1, 10);
+// Caselle dei parametri ambientali: data-env="oggetto.chiave", data-scale per le percentuali.
+// Cambiando un valore tutte le creature vanno rivalutate: vale dal ciclo successivo.
+const ENV_TARGETS = { physics: PHYSICS, terrain: TERRAIN };
+
+function updateEnvironment() {
+  envInputs.forEach((input) => {
+    const [obj, key] = input.dataset.env.split('.');
+    const value = clamp(Number(input.value) || 0, Number(input.min), Number(input.max));
+    ENV_TARGETS[obj][key] = value * Number(input.dataset.scale || 1);
+  });
   population.forEach((c) => {
     c.evaluated = false;
   });
 }
 
-[obstacleHeightInput, obstacleWidthInput, obstacleGapInput].forEach((input) => input.addEventListener('change', updateTerrain));
+envInputs.forEach((input) => input.addEventListener('change', updateEnvironment));
+envResetBtn.addEventListener('click', () => {
+  envInputs.forEach((input) => {
+    input.value = input.defaultValue;
+  });
+  updateEnvironment();
+});
 
 updateAutoLabel();
 updateMutation();
-updateTerrain();
+renderSpeciesLegend();
+updateEnvironment();
 resetSimulation();
 animateWorlds();

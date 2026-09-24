@@ -51,6 +51,11 @@ Piccola web app in JavaScript vanilla che simula, in modo didattico, una selezio
 - Pavimento con segnalatori metrici per percepire la velocità.
 - Grafico della distanza massima e media per ciclo.
 - Riepilogo delle specie: numero di creature e record di distanza per ogni numero di nodi.
+- Grafico delle specie: per ogni ciclo, la percentuale di ciascuna specie (da 3 a 10 nodi) sulla popolazione,
+  con un colore per specie; passando il mouse si leggono i valori del ciclo.
+- Pannello **Ambiente**: caselle per ostacoli, gravità, resistenza dell'aria, forza, lunghezza massima e carica
+  iniziale dei muscoli, energia iniziale, ricarica, costo dell'energia e velocità di riferimento del costo.
+  Le modifiche valgono dal ciclo successivo; "Valori iniziali" ripristina i valori di partenza.
 - Avanzamento manuale o automatico, con pausa regolabile tra un ciclo e l'altro.
 - Cursore "Intensità mutazioni" (da ×0 a ×3) per regolare la variabilità durante la simulazione.
 
