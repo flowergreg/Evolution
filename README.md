@@ -6,7 +6,7 @@ Piccola web app in JavaScript vanilla che simula, in modo didattico, una selezio
 
 - Popolazione iniziale: **1000 creature** casuali.
 - Ogni creatura ha:
-  - da 3 a 10 nodi, ciascuno con posizione iniziale e massa;
+  - da 3 a 10 nodi, ciascuno con posizione iniziale, massa e **attrito** (da 0 = ghiaccio a 1 = presa totale);
   - muscoli che collegano coppie di nodi e si comportano come molle oscillanti
     (lunghezza a riposo, ampiezza, frequenza, fase, rigidità);
   - ogni nodo può essere collegato a **più muscoli** (grafo generale, non solo catena).
@@ -24,15 +24,19 @@ Piccola web app in JavaScript vanilla che simula, in modo didattico, una selezio
 ## Fisica semplificata
 
 - Gravità e resistenza dell'aria uguale per tutte le creature.
-- Pavimento verde impenetrabile con attrito: i nodi a terra fanno presa, quelli sollevati scivolano liberamente.
+- Pavimento verde impenetrabile: i nodi a terra fanno presa secondo il loro attrito, quelli sollevati si muovono liberamente.
   Per avanzare una creatura deve quindi coordinare i muscoli in modo da spingere con i nodi appoggiati.
+- **Energia dei muscoli:** ogni muscolo parte con 100 di energia, uguale per tutti e non soggetta a mutazioni.
+  Il lavoro compiuto la consuma e la spinta cala in proporzione; a energia 0 il muscolo non agisce più.
 - All'avvio i muscoli si caricano gradualmente, da 0 a 100% della forza in 0,5 secondi:
   così le creature non possono avanzare con un unico balzo iniziale e devono camminare.
-- Limiti a forza dei muscoli e velocità dei nodi, per evitare "esplosioni" numeriche.
+- Limite alla forza di ogni muscolo.
 
 ## Visualizzazione
 
 - Due viste 2D animate: creatura migliore e creatura mediana.
+  - colore dei nodi da bianco (attrito 0) a nero (attrito 1); anello giallo = nodo a terra;
+  - i muscoli sbiadiscono man mano che consumano energia.
 - Pavimento con segnalatori metrici per percepire la velocità.
 - Grafico della distanza massima e media per ciclo.
 - Avanzamento manuale o automatico, con pausa regolabile tra un ciclo e l'altro.

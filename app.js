@@ -6,8 +6,8 @@ const GRAVITY = -9.81;
 const MAX_MUSCLE_FORCE = 160;
 const ENERGY_RAMP_SECONDS = 0.5; // i muscoli si caricano da 0 a 100% in questo tempo
 const AIR_DAMPING = 0.98;
-const GROUND_FRICTION = 0.86;
-const MAX_SPEED = 6;
+const MUSCLE_ENERGY = 100; // energia iniziale di ogni muscolo, uguale per tutti
+const ENERGY_COST = 0.1; // energia consumata per unità di lavoro (forza × accorciamento/allungamento)
 const MAX_WORLD_X = 150;
 const MAX_WORLD_Y = 8;
 
@@ -58,7 +58,7 @@ function clamp(v, min, max) {
 const MAX_MUSCLES = 28;
 
 function randomNode() {
-  return { x: rand(-1.2, 1.2), y: rand(0.7, 1.7), mass: rand(0.7, 1.4) };
+  return { x: rand(-1.2, 1.2), y: rand(0.7, 1.7), mass: rand(0.7, 1.4), friction: rand(0, 1) };
 }
 
 function randomMuscle(from, to) {
@@ -181,6 +181,7 @@ function mutateCreature(child) {
     n.x = mutateValue(n.x, 0.12, -1.8, 1.8);
     n.y = mutateValue(n.y, 0.12, 0.35, 2.4);
     n.mass = mutateValue(n.mass, 0.08, 0.5, 2.0);
+    n.friction = mutateValue(n.friction, 0.05, 0, 1);
   });
 
   child.muscles.forEach((m) => {
@@ -246,9 +247,14 @@ function createSimState(creature) {
     vx: 0,
     vy: 0,
     mass: n.mass,
+    friction: n.friction,
     grounded: false,
   }));
-  return { nodes };
+  const muscles = creature.muscles.map((m) => ({
+    energy: MUSCLE_ENERGY,
+    length: Math.hypot(nodes[m.to].x - nodes[m.from].x, nodes[m.to].y - nodes[m.from].y),
+  }));
+  return { nodes, muscles };
 }
 
 function stepPhysics(creature, state, t, dt) {
@@ -256,14 +262,18 @@ function stepPhysics(creature, state, t, dt) {
   // Carica graduale: impedisce il balzo iniziale dovuto allo scatto dei muscoli.
   const maxForce = MAX_MUSCLE_FORCE * Math.min(1, t / ENERGY_RAMP_SECONDS);
 
-  creature.muscles.forEach((m) => {
+  creature.muscles.forEach((m, i) => {
+    const ms = state.muscles[i];
     const a = state.nodes[m.from];
     const b = state.nodes[m.to];
     const dx = b.x - a.x;
     const dy = b.y - a.y;
     const dist = Math.hypot(dx, dy) || 0.0001;
     const target = m.restLength + m.amplitude * Math.sin(t * m.frequency * Math.PI * 2 + m.phase);
-    const springMag = clamp(m.stiffness * (dist - target), -maxForce, maxForce);
+    // La spinta cala in proporzione all'energia rimasta; a energia 0 il muscolo non agisce più.
+    const springMag = clamp(m.stiffness * (dist - target), -maxForce, maxForce) * (ms.energy / MUSCLE_ENERGY);
+    ms.energy = Math.max(0, ms.energy - Math.abs(springMag * (dist - ms.length)) * ENERGY_COST);
+    ms.length = dist;
     const dirX = dx / dist;
     const dirY = dy / dist;
 
@@ -277,8 +287,8 @@ function stepPhysics(creature, state, t, dt) {
     const ax = forces[i].fx / n.mass;
     const ay = forces[i].fy / n.mass;
 
-    n.vx = clamp((n.vx + ax * dt) * AIR_DAMPING, -MAX_SPEED, MAX_SPEED);
-    n.vy = clamp((n.vy + ay * dt) * AIR_DAMPING, -MAX_SPEED, MAX_SPEED);
+    n.vx = (n.vx + ax * dt) * AIR_DAMPING;
+    n.vy = (n.vy + ay * dt) * AIR_DAMPING;
 
     n.x += n.vx * dt;
     n.y += n.vy * dt;
@@ -289,7 +299,8 @@ function stepPhysics(creature, state, t, dt) {
     if (n.y < 0) {
       n.y = 0;
       if (n.vy < 0) n.vy = -n.vy * 0.08;
-      n.vx *= GROUND_FRICTION;
+      // Attrito del nodo: 0 = ghiaccio (scivola), 1 = presa totale.
+      n.vx *= 1 - n.friction;
       n.grounded = true;
     }
   });
@@ -311,6 +322,7 @@ function simulateCreature(creature, duration, dt, trackFrames = false) {
       frames.push({
         t,
         nodes: state.nodes.map((n) => ({ x: n.x, y: n.y, grounded: n.grounded })),
+        energy: state.muscles.map((ms) => ms.energy),
       });
     }
   }
@@ -450,23 +462,41 @@ function drawCreatureFrame(ctx, canvas, creature, color, label) {
   const toCanvasX = (x) => (x - avgX) * scale + 60;
   const toCanvasY = (y) => height - 42 - y * scale;
 
+  // I muscoli sbiadiscono man mano che consumano la loro energia.
   ctx.lineWidth = 2.5;
   ctx.strokeStyle = color;
-  creature.muscles.forEach((m) => {
+  creature.muscles.forEach((m, i) => {
     const a = frame.nodes[m.from];
     const b = frame.nodes[m.to];
     if (!a || !b) return;
+    ctx.globalAlpha = 0.15 + 0.85 * (frame.energy[i] / MUSCLE_ENERGY);
     ctx.beginPath();
     ctx.moveTo(toCanvasX(a.x), toCanvasY(a.y));
     ctx.lineTo(toCanvasX(b.x), toCanvasY(b.y));
     ctx.stroke();
   });
+  ctx.globalAlpha = 1;
 
-  frame.nodes.forEach((n) => {
-    ctx.fillStyle = n.grounded ? '#facc15' : '#e2e8f0';
+  // Colore del nodo: bianco = attrito 0 (scivola), nero = attrito 1 (presa totale).
+  // Anello giallo = nodo a contatto col suolo.
+  frame.nodes.forEach((n, i) => {
+    const grey = Math.round(255 * (1 - creature.nodes[i].friction));
+    const x = toCanvasX(n.x);
+    const y = toCanvasY(n.y);
+    ctx.fillStyle = `rgb(${grey}, ${grey}, ${grey})`;
+    ctx.strokeStyle = '#94a3b8';
+    ctx.lineWidth = 1;
     ctx.beginPath();
-    ctx.arc(toCanvasX(n.x), toCanvasY(n.y), 4, 0, Math.PI * 2);
+    ctx.arc(x, y, 5, 0, Math.PI * 2);
     ctx.fill();
+    ctx.stroke();
+    if (n.grounded) {
+      ctx.strokeStyle = '#facc15';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(x, y, 8, 0, Math.PI * 2);
+      ctx.stroke();
+    }
   });
 
   ctx.fillStyle = '#cbd5e1';
