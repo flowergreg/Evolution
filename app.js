@@ -10,6 +10,9 @@ const AIR_DAMPING = 0.98;
 const MUSCLE_ENERGY = 100; // energia iniziale di ogni muscolo, uguale per tutti
 const ENERGY_RECHARGE = 10; // energia recuperata da ogni muscolo al secondo (fino a 100)
 const ENERGY_COST = 0.1; // energia consumata per unità di lavoro (forza × accorciamento/allungamento)
+// Velocità del muscolo (m/s) a cui il costo è quello base: un muscolo due volte più rapido
+// consuma il doppio per lo stesso lavoro, uno lento la metà. Così la corsa costa molto più del passo.
+const ENERGY_SPEED_REF = 0.5;
 const MAX_WORLD_X = 150;
 const MAX_WORLD_Y = 8;
 const OBSTACLE_START_X = 2.5; // il primo ostacolo comincia qui (le creature partono intorno a 0)
@@ -316,7 +319,8 @@ function stepPhysics(creature, state, t, dt) {
     const target = m.restLength + m.amplitude * Math.sin(t * m.frequency * Math.PI * 2 + m.phase);
     // La spinta cala in proporzione all'energia rimasta; a energia 0 il muscolo non agisce più.
     const springMag = clamp(m.stiffness * (dist - target), -maxForce, maxForce) * (ms.energy / MUSCLE_ENERGY);
-    const spent = Math.abs(springMag * (dist - ms.length)) * ENERGY_COST;
+    const change = Math.abs(dist - ms.length);
+    const spent = Math.abs(springMag) * change * ENERGY_COST * (change / dt / ENERGY_SPEED_REF);
     ms.energy = clamp(ms.energy - spent + ENERGY_RECHARGE * dt, 0, MUSCLE_ENERGY);
     ms.length = dist;
     const dirX = dx / dist;
