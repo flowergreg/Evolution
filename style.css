@@ -65,6 +65,24 @@ button:hover {
   border-color: var(--accent2);
 }
 
+.controls .terrain {
+  margin-top: 0.6rem;
+}
+
+.terrain input {
+  width: 4.5rem;
+  background: #0f172a;
+  color: var(--text);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 0.25rem 0.4rem;
+}
+
+.hint {
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
 .stats {
   margin-top: 0.9rem;
   display: grid;

@@ -31,6 +31,13 @@
           </label>
           <span id="mutationLabel">×1.0</span>
         </div>
+        <div class="row terrain">
+          <strong>Ostacoli (m):</strong>
+          <label>Altezza <input id="obstacleHeight" type="number" min="0" max="1" step="0.05" value="0.2" /></label>
+          <label>Larghezza <input id="obstacleWidth" type="number" min="0.05" max="3" step="0.05" value="0.2" /></label>
+          <label>Distanza fra ostacoli <input id="obstacleGap" type="number" min="0.1" max="10" step="0.1" value="1.5" /></label>
+          <span class="hint">Altezza 0 = terreno piatto. Le modifiche valgono dal ciclo successivo.</span>
+        </div>
         <div class="stats" id="stats"></div>
       </section>
 

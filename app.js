@@ -12,6 +12,18 @@ const ENERGY_RECHARGE = 10; // energia recuperata da ogni muscolo al secondo (fi
 const ENERGY_COST = 0.1; // energia consumata per unità di lavoro (forza × accorciamento/allungamento)
 const MAX_WORLD_X = 150;
 const MAX_WORLD_Y = 8;
+const OBSTACLE_START_X = 2.5; // il primo ostacolo comincia qui (le creature partono intorno a 0)
+
+// Ostacoli sul terreno, modificabili dalla pagina (in metri). Altezza 0 = terreno piatto.
+const TERRAIN = { height: 0.2, width: 0.2, gap: 1.5 };
+
+// Se il punto x cade sopra un ostacolo, restituisce i bordi dell'ostacolo; altrimenti null.
+function obstacleAt(x) {
+  if (TERRAIN.height <= 0 || x < OBSTACLE_START_X) return null;
+  const period = TERRAIN.width + TERRAIN.gap;
+  const left = OBSTACLE_START_X + Math.floor((x - OBSTACLE_START_X) / period) * period;
+  return x < left + TERRAIN.width ? { left, right: left + TERRAIN.width } : null;
+}
 
 // Parametri dell'evoluzione.
 const EVOLUTION = {
@@ -31,6 +43,9 @@ const autoSpeedInput = document.getElementById('autoSpeed');
 const autoSpeedLabel = document.getElementById('autoSpeedLabel');
 const mutationInput = document.getElementById('mutationStrength');
 const mutationLabel = document.getElementById('mutationLabel');
+const obstacleHeightInput = document.getElementById('obstacleHeight');
+const obstacleWidthInput = document.getElementById('obstacleWidth');
+const obstacleGapInput = document.getElementById('obstacleGap');
 
 const chartCanvas = document.getElementById('chartCanvas');
 const chartCtx = chartCanvas.getContext('2d');
@@ -320,14 +335,31 @@ function stepPhysics(creature, state, t, dt) {
     n.vx = (n.vx + ax * dt) * AIR_DAMPING;
     n.vy = (n.vy + ay * dt) * AIR_DAMPING;
 
+    const prevX = n.x;
+    const prevY = n.y;
     n.x += n.vx * dt;
     n.y += n.vy * dt;
     n.x = clamp(n.x, -MAX_WORLD_X, MAX_WORLD_X);
     n.y = clamp(n.y, -1, MAX_WORLD_Y);
 
+    // Ostacolo: se il nodo ci arriva da sopra si appoggia sulla cima,
+    // se ci arriva di lato urta la parete e viene respinto.
+    let floor = 0;
+    const block = obstacleAt(n.x);
+    if (block && n.y < TERRAIN.height) {
+      if (prevY >= TERRAIN.height) {
+        floor = TERRAIN.height;
+      } else {
+        n.x = prevX < block.left ? block.left - 0.001 : block.right + 0.001;
+        n.vx = 0;
+      }
+    } else if (block) {
+      floor = TERRAIN.height;
+    }
+
     n.grounded = false;
-    if (n.y < 0) {
-      n.y = 0;
+    if (n.y < floor) {
+      n.y = floor;
       if (n.vy < 0) n.vy = -n.vy * 0.08;
       // Attrito del nodo: 0 = ghiaccio (scivola), 1 = presa totale.
       n.vx *= 1 - n.friction;
@@ -477,6 +509,21 @@ function drawGround(ctx, width, height, cameraX) {
   ctx.moveTo(0, groundY);
   ctx.lineTo(width, groundY);
   ctx.stroke();
+
+  if (TERRAIN.height > 0) {
+    const period = TERRAIN.width + TERRAIN.gap;
+    const first = Math.max(0, Math.floor((minMeter - OBSTACLE_START_X) / period));
+    ctx.fillStyle = '#a16207';
+    ctx.strokeStyle = '#facc15';
+    ctx.lineWidth = 1;
+    for (let left = OBSTACLE_START_X + first * period; left <= maxMeter; left += period) {
+      const x = (left - cameraX) * 35 + 60;
+      const w = TERRAIN.width * 35;
+      const h = TERRAIN.height * 35;
+      ctx.fillRect(x, groundY - h, w, h);
+      ctx.strokeRect(x, groundY - h, w, h);
+    }
+  }
 }
 
 function drawCreatureFrame(ctx, canvas, creature, color, label) {
@@ -630,7 +677,21 @@ function updateMutation() {
 
 mutationInput.addEventListener('input', updateMutation);
 
+// Cambiando gli ostacoli tutte le creature vanno rivalutate: vale dal ciclo successivo.
+function updateTerrain() {
+  const read = (input, min, max) => clamp(Number(input.value) || 0, min, max);
+  TERRAIN.height = read(obstacleHeightInput, 0, 1);
+  TERRAIN.width = read(obstacleWidthInput, 0.05, 3);
+  TERRAIN.gap = read(obstacleGapInput, 0.1, 10);
+  population.forEach((c) => {
+    c.evaluated = false;
+  });
+}
+
+[obstacleHeightInput, obstacleWidthInput, obstacleGapInput].forEach((input) => input.addEventListener('change', updateTerrain));
+
 updateAutoLabel();
 updateMutation();
+updateTerrain();
 resetSimulation();
 animateWorlds();

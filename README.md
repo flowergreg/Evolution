@@ -35,6 +35,9 @@ Piccola web app in JavaScript vanilla che simula, in modo didattico, una selezio
   L'energia si ricarica di 10 al secondo (fino a 100): conviene un'andatura economica e regolare, non uno scatto iniziale.
 - All'avvio i muscoli si caricano gradualmente, da 0 a 100% della forza in 0,5 secondi:
   così le creature non possono avanzare con un unico balzo iniziale e devono camminare.
+- **Ostacoli:** quadratini sul terreno a partire da 2,5 m, con altezza, larghezza e distanza
+  regolabili dalla pagina durante la simulazione (valori iniziali 0,2 / 0,2 / 1,5 m; altezza 0 = terreno piatto).
+  Un nodo che arriva da sopra si appoggia sulla cima, uno che arriva di lato urta la parete.
 - Limite alla forza di ogni muscolo.
 
 ## Visualizzazione
