@@ -16,6 +16,7 @@ const PHYSICS = {
   // Velocità del muscolo (m/s) a cui il costo è quello base: un muscolo due volte più rapido
   // consuma il doppio per lo stesso lavoro, uno lento la metà. Così la corsa costa molto più del passo.
   energySpeedRef: 0.5,
+  weightCost: 0.2, // consumo in più per unità di peso: il consumo è moltiplicato per (1 + weightCost × peso)
 };
 const MAX_WORLD_X = 150;
 const MAX_WORLD_Y = 8;
@@ -30,6 +31,21 @@ function obstacleAt(x) {
   const period = TERRAIN.width + TERRAIN.gap;
   const left = OBSTACLE_START_X + Math.floor((x - OBSTACLE_START_X) / period) * period;
   return x < left + TERRAIN.width ? { left, right: left + TERRAIN.width } : null;
+}
+
+// Primo ostacolo il cui bordo viene attraversato andando da x0 a x1 (per i nodi veloci
+// che in un solo passo passerebbero da un lato all'altro di un ostacolo).
+function obstacleCrossed(x0, x1) {
+  if (TERRAIN.height <= 0 || x0 === x1) return null;
+  const period = TERRAIN.width + TERRAIN.gap;
+  if (x1 > x0) {
+    const left = OBSTACLE_START_X + Math.max(0, Math.ceil((x0 - OBSTACLE_START_X) / period)) * period;
+    return left <= x1 ? { left, right: left + TERRAIN.width, edge: left } : null;
+  }
+  const k = Math.floor((x0 - OBSTACLE_START_X - TERRAIN.width) / period);
+  if (k < 0) return null;
+  const right = OBSTACLE_START_X + k * period + TERRAIN.width;
+  return right >= x1 && right <= x0 ? { left: right - TERRAIN.width, right, edge: right } : null;
 }
 
 // Parametri dell'evoluzione.
@@ -106,7 +122,13 @@ function randomMuscle(from, to) {
     frequency: rand(0.5, 3.0),
     phase: rand(0, Math.PI * 2),
     stiffness: rand(20, 95),
+    strength: rand(0.2, 1), // frazione della forza massima; pesa sulla creatura (vedi creatureWeight)
   };
+}
+
+// Peso della creatura: somma delle forze dei suoi muscoli. Più pesa, più ogni movimento consuma.
+function creatureWeight(creature) {
+  return creature.muscles.reduce((sum, m) => sum + m.strength, 0);
 }
 
 const pairKey = (a, b) => (a < b ? `${a}-${b}` : `${b}-${a}`);
@@ -231,6 +253,7 @@ function mutateCreature(child) {
     m.frequency = mutateValue(m.frequency, 0.18, 0.2, 3.8);
     m.phase = (m.phase + rand(-0.35, 0.35) * k) % (Math.PI * 2);
     m.stiffness = mutateValue(m.stiffness, 8, 8, 140);
+    m.strength = mutateValue(m.strength, 0.05, 0.05, 1);
   });
 
   child.distance = 0;
@@ -316,7 +339,7 @@ function createSimState(creature) {
     energy: PHYSICS.muscleEnergy,
     length: Math.hypot(nodes[m.to].x - nodes[m.from].x, nodes[m.to].y - nodes[m.from].y),
   }));
-  return { nodes, muscles };
+  return { nodes, muscles, weightFactor: 1 + PHYSICS.weightCost * creatureWeight(creature) };
 }
 
 // Nessun muscolo può superare PHYSICS.maxMuscleLength: i due nodi vengono riavvicinati
@@ -350,7 +373,7 @@ function enforceMuscleLength(creature, state) {
 }
 
 function stepPhysics(creature, state, t, dt) {
-  enforceMuscleLength(creature, state);
+  moveWithObstacles(state, () => enforceMuscleLength(creature, state));
   const forces = state.nodes.map(() => ({ fx: 0, fy: -PHYSICS.gravity }));
   // Carica graduale: impedisce il balzo iniziale dovuto allo scatto dei muscoli.
   const maxForce = PHYSICS.maxMuscleForce * (PHYSICS.energyRamp > 0 ? Math.min(1, t / PHYSICS.energyRamp) : 1);
@@ -364,9 +387,10 @@ function stepPhysics(creature, state, t, dt) {
     const dist = Math.hypot(dx, dy) || 0.0001;
     const target = Math.min(PHYSICS.maxMuscleLength, m.restLength + m.amplitude * Math.sin(t * m.frequency * Math.PI * 2 + m.phase));
     // La spinta cala in proporzione all'energia rimasta; a energia 0 il muscolo non agisce più.
-    const springMag = clamp(m.stiffness * (dist - target), -maxForce, maxForce) * (ms.energy / PHYSICS.muscleEnergy);
+    const muscleMax = maxForce * m.strength;
+    const springMag = clamp(m.stiffness * (dist - target), -muscleMax, muscleMax) * (ms.energy / PHYSICS.muscleEnergy);
     const change = Math.abs(dist - ms.length);
-    const spent = Math.abs(springMag) * change * PHYSICS.energyCost * (change / dt / PHYSICS.energySpeedRef);
+    const spent = Math.abs(springMag) * change * PHYSICS.energyCost * (change / dt / PHYSICS.energySpeedRef) * state.weightFactor;
     ms.energy = clamp(ms.energy - spent + PHYSICS.energyRecharge * dt, 0, PHYSICS.muscleEnergy);
     ms.length = dist;
     const dirX = dx / dist;
@@ -392,28 +416,110 @@ function stepPhysics(creature, state, t, dt) {
     n.x = clamp(n.x, -MAX_WORLD_X, MAX_WORLD_X);
     n.y = clamp(n.y, -1, MAX_WORLD_Y);
 
-    // Ostacolo: se il nodo ci arriva da sopra si appoggia sulla cima,
-    // se ci arriva di lato urta la parete e viene respinto.
-    let floor = 0;
-    const block = obstacleAt(n.x);
-    if (block && n.y < TERRAIN.height) {
-      if (prevY >= TERRAIN.height) {
-        floor = TERRAIN.height;
-      } else {
-        n.x = prevX < block.left ? block.left - 0.001 : block.right + 0.001;
-        n.vx = 0;
-      }
-    } else if (block) {
-      floor = TERRAIN.height;
-    }
+    const floor = resolveObstacle(n, prevX, prevY);
 
     n.grounded = false;
     if (n.y < floor) {
       n.y = floor;
+      // Attrito proporzionale alla pressione: il suolo può frenare il nodo in orizzontale
+      // al massimo quanto lo ha frenato in verticale, per il coefficiente d'attrito del nodo.
+      // Un nodo che sfiora appena il suolo scivola; uno che ci preme sopra fa presa.
+      const pressure = n.vy < 0 ? -n.vy * 1.08 : 0;
       if (n.vy < 0) n.vy = -n.vy * 0.08;
-      // Attrito del nodo: 0 = ghiaccio (scivola), 1 = presa totale.
-      n.vx *= 1 - n.friction;
+      const grip = n.friction * pressure;
+      n.vx = Math.abs(n.vx) <= grip ? 0 : n.vx - Math.sign(n.vx) * grip;
       n.grounded = true;
+    }
+  });
+
+  moveWithObstacles(state, () => collideMusclesWithObstacles(creature, state));
+}
+
+// Esegue una correzione di posizione (es. limite di lunghezza dei muscoli) e poi
+// controlla che nessun nodo sia stato spinto dentro o attraverso un ostacolo.
+function moveWithObstacles(state, correction) {
+  const before = state.nodes.map((n) => [n.x, n.y]);
+  correction();
+  state.nodes.forEach((n, i) => {
+    const floor = resolveObstacle(n, before[i][0], before[i][1]);
+    if (n.y < floor) n.y = floor;
+  });
+}
+
+// Ostacolo: se il nodo ci arriva da sopra si appoggia sulla cima, se ci arriva di lato
+// urta la parete e viene respinto. Si controlla tutto il percorso dalla posizione precedente,
+// così un nodo veloce non può "saltare" un ostacolo. Restituisce l'altezza del suolo sotto il nodo.
+function resolveObstacle(n, prevX, prevY) {
+  if (TERRAIN.height <= 0) return 0;
+  const crossed = obstacleCrossed(prevX, n.x);
+  if (crossed && !obstacleAt(prevX)) {
+    const yAtEdge = prevY + ((n.y - prevY) * (crossed.edge - prevX)) / (n.x - prevX);
+    if (yAtEdge < TERRAIN.height) {
+      n.x = crossed.edge + (n.x > prevX ? -0.001 : 0.001);
+      n.vx = 0;
+    }
+  }
+  const block = obstacleAt(n.x);
+  if (!block) return 0;
+  if (n.y >= TERRAIN.height) return TERRAIN.height;
+  // Il nodo è dentro l'ostacolo: esce dal lato da cui è entrato, o dalla faccia più vicina.
+  const fromAbove = prevY >= TERRAIN.height;
+  const toLeft = n.x - block.left;
+  const toRight = block.right - n.x;
+  const toTop = TERRAIN.height - n.y;
+  if (fromAbove || (toTop < toLeft && toTop < toRight && obstacleAt(prevX))) return TERRAIN.height;
+  const exitLeft = obstacleAt(prevX) ? toLeft <= toRight : prevX < block.left;
+  n.x = exitLeft ? block.left - 0.001 : block.right + 0.001;
+  n.vx = 0;
+  return 0;
+}
+
+// I muscoli sono solidi: se un muscolo passa attraverso lo spigolo superiore di un ostacolo,
+// viene spinto fuori (i due nodi si spostano in proporzione alla loro vicinanza allo spigolo)
+// e perde la velocità con cui premeva contro lo spigolo.
+function collideMusclesWithObstacles(creature, state) {
+  if (TERRAIN.height <= 0) return;
+  creature.muscles.forEach((m) => {
+    const a = state.nodes[m.from];
+    const b = state.nodes[m.to];
+    const lo = Math.min(a.x, b.x);
+    const hi = Math.max(a.x, b.x);
+    if (hi < OBSTACLE_START_X || Math.min(a.y, b.y) >= TERRAIN.height) return;
+    const dx = b.x - a.x;
+    const dy = b.y - a.y;
+    const len = Math.hypot(dx, dy);
+    if (len < 1e-6) return;
+    // Normale al muscolo rivolta verso l'alto (o, se il muscolo è verticale, verso destra).
+    let nx = -dy / len;
+    let ny = dx / len;
+    if (ny < 0 || (ny === 0 && nx < 0)) {
+      nx = -nx;
+      ny = -ny;
+    }
+    const period = TERRAIN.width + TERRAIN.gap;
+    const first = Math.max(0, Math.floor((lo - OBSTACLE_START_X) / period));
+    for (let left = OBSTACLE_START_X + first * period; left <= hi; left += period) {
+      [left, left + TERRAIN.width].forEach((cx) => {
+        const cy = TERRAIN.height;
+        const t = ((cx - a.x) * dx + (cy - a.y) * dy) / (len * len);
+        if (t <= 0 || t >= 1) return;
+        const depth = (cx - (a.x + dx * t)) * nx + (cy - (a.y + dy * t)) * ny;
+        if (depth <= 0 || depth > TERRAIN.height + 0.1) return;
+        const wa = 1 - t;
+        const wb = t;
+        const norm = wa * wa + wb * wb;
+        a.x += nx * depth * (wa / norm);
+        a.y += ny * depth * (wa / norm);
+        b.x += nx * depth * (wb / norm);
+        b.y += ny * depth * (wb / norm);
+        [[a, wa], [b, wb]].forEach(([node, w]) => {
+          const into = node.vx * nx + node.vy * ny;
+          if (into < 0) {
+            node.vx -= nx * into * w;
+            node.vy -= ny * into * w;
+          }
+        });
+      });
     }
   });
 }
@@ -707,12 +813,13 @@ function drawCreatureFrame(ctx, canvas, creature, color, label) {
   const toCanvasY = (y) => height - 42 - y * scale;
 
   // I muscoli sbiadiscono man mano che consumano la loro energia.
-  ctx.lineWidth = 2.5;
+  // Spessore della linea = forza del muscolo.
   ctx.strokeStyle = color;
   creature.muscles.forEach((m, i) => {
     const a = frame.nodes[m.from];
     const b = frame.nodes[m.to];
     if (!a || !b) return;
+    ctx.lineWidth = 1 + 5 * m.strength;
     ctx.globalAlpha = 0.15 + 0.85 * (frame.energy[i] / PHYSICS.muscleEnergy);
     ctx.beginPath();
     ctx.moveTo(toCanvasX(a.x), toCanvasY(a.y));
@@ -745,7 +852,7 @@ function drawCreatureFrame(ctx, canvas, creature, color, label) {
 
   ctx.fillStyle = '#cbd5e1';
   ctx.font = '12px sans-serif';
-  ctx.fillText(`${label} | nodi: ${creature.nodes.length} | muscoli: ${creature.muscles.length}`, 8, 16);
+  ctx.fillText(`${label} | nodi: ${creature.nodes.length} | muscoli: ${creature.muscles.length} | peso: ${creatureWeight(creature).toFixed(2)}`, 8, 16);
   ctx.fillText(`Distanza in 10s: ${creature.distance.toFixed(2)} m`, 8, 32);
 }
 

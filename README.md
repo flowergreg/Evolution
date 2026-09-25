@@ -8,7 +8,8 @@ Piccola web app in JavaScript vanilla che simula, in modo didattico, una selezio
 - Ogni creatura ha:
   - da 3 a 10 nodi, ciascuno con posizione iniziale, massa e **attrito** (da 0 = ghiaccio a 1 = presa totale);
   - muscoli che collegano coppie di nodi e si comportano come molle oscillanti
-    (lunghezza a riposo fino a 1,5 m, ampiezza, frequenza, fase, rigidità);
+    (lunghezza a riposo fino a 1,5 m, ampiezza, frequenza, fase, rigidità, **forza** da 0,05 a 1);
+  - **peso** = somma delle forze dei muscoli: più una creatura pesa, più ogni movimento consuma energia;
   - ogni nodo può essere collegato a **più muscoli** (grafo generale, non solo catena).
   - ogni coppia di nodi può avere **al massimo un muscolo** (con 3 nodi, al massimo 3 muscoli).
 - Fitness: **metri percorsi in 10 secondi** dal baricentro della creatura.
@@ -28,7 +29,8 @@ Piccola web app in JavaScript vanilla che simula, in modo didattico, una selezio
 ## Fisica semplificata
 
 - Gravità e resistenza dell'aria uguale per tutte le creature.
-- Pavimento verde impenetrabile: i nodi a terra fanno presa secondo il loro attrito, quelli sollevati si muovono liberamente.
+- Pavimento verde impenetrabile: i nodi a terra fanno presa secondo il loro attrito **e secondo quanto premono sul suolo**
+  (un nodo che lo sfiora appena scivola), quelli sollevati si muovono liberamente.
   Per avanzare una creatura deve quindi coordinare i muscoli in modo da spingere con i nodi appoggiati.
 - **Energia dei muscoli:** ogni muscolo parte con 100 di energia, uguale per tutti e non soggetta a mutazioni.
   Il lavoro compiuto la consuma e la spinta cala in proporzione; a energia 0 il muscolo non agisce più.
@@ -39,7 +41,9 @@ Piccola web app in JavaScript vanilla che simula, in modo didattico, una selezio
   così le creature non possono avanzare con un unico balzo iniziale e devono camminare.
 - **Ostacoli:** quadratini sul terreno a partire da 2,5 m, con altezza, larghezza e distanza
   regolabili dalla pagina durante la simulazione (valori iniziali 0,2 / 0,2 / 1,5 m; altezza 0 = terreno piatto).
-  Un nodo che arriva da sopra si appoggia sulla cima, uno che arriva di lato urta la parete.
+  Un nodo che arriva da sopra si appoggia sulla cima, uno che arriva di lato urta la parete; il controllo segue
+  tutto il percorso del nodo, così nemmeno un nodo veloce può scavalcarli. Anche i muscoli sono solidi: non possono
+  passare attraverso gli spigoli degli ostacoli.
 - Limite alla forza di ogni muscolo e alla sua lunghezza: oltre **1,5 m** un muscolo non si allunga più,
   come una corda tesa (impedisce di "lanciare un'ancora" lontano e tirarsi dietro il corpo).
 
@@ -47,6 +51,7 @@ Piccola web app in JavaScript vanilla che simula, in modo didattico, una selezio
 
 - Due viste 2D animate: creatura migliore e creatura mediana.
   - colore dei nodi da bianco (attrito 0) a nero (attrito 1); anello giallo = nodo a terra;
+  - spessore dei muscoli = forza;
   - i muscoli sbiadiscono man mano che consumano energia.
 - Pavimento con segnalatori metrici per percepire la velocità.
 - Grafico della distanza massima e media per ciclo.
