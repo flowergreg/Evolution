@@ -342,38 +342,39 @@ function createSimState(creature) {
   return { nodes, muscles, weightFactor: 1 + PHYSICS.weightCost * creatureWeight(creature) };
 }
 
-// Nessun muscolo può superare PHYSICS.maxMuscleLength: i due nodi vengono riavvicinati
-// (di più il più leggero) e perdono la velocità con cui si stavano allontanando.
-// La correzione è ripetuta alcune volte, perché più muscoli possono tirare lo stesso nodo.
-function enforceMuscleLength(creature, state) {
-  for (let pass = 0; pass < 4; pass += 1) creature.muscles.forEach((m) => {
-    const a = state.nodes[m.from];
-    const b = state.nodes[m.to];
-    const dx = b.x - a.x;
-    const dy = b.y - a.y;
-    const dist = Math.hypot(dx, dy);
-    if (dist <= PHYSICS.maxMuscleLength) return;
-    const ux = dx / dist;
-    const uy = dy / dist;
-    const shareA = b.mass / (a.mass + b.mass);
-    const shareB = a.mass / (a.mass + b.mass);
-    const excess = dist - PHYSICS.maxMuscleLength;
-    a.x += ux * excess * shareA;
-    a.y += uy * excess * shareA;
-    b.x -= ux * excess * shareB;
-    b.y -= uy * excess * shareB;
-    const separating = (b.vx - a.vx) * ux + (b.vy - a.vy) * uy;
-    if (separating > 0) {
-      a.vx += ux * separating * shareA;
-      a.vy += uy * separating * shareA;
-      b.vx -= ux * separating * shareB;
-      b.vy -= uy * separating * shareB;
-    }
-  });
+// Nessun muscolo può superare PHYSICS.maxMuscleLength: agisce come una corda tesa.
+// Il vincolo agisce sulle velocità con spinte uguali e opposte sui due nodi (come una forza vera),
+// prima dello spostamento: così l'attrito col suolo resta libero di trattenere un nodo ancorato.
+// Se il muscolo è già oltre il limite, i nodi ricevono anche una lieve velocità di riavvicinamento.
+// Ripetuto alcune volte, perché più muscoli possono tirare lo stesso nodo.
+function limitMuscleLength(creature, state, dt) {
+  for (let pass = 0; pass < 4; pass += 1) {
+    creature.muscles.forEach((m) => {
+      const a = state.nodes[m.from];
+      const b = state.nodes[m.to];
+      const dx = b.x - a.x;
+      const dy = b.y - a.y;
+      const dist = Math.hypot(dx, dy) || 0.0001;
+      const ux = dx / dist;
+      const uy = dy / dist;
+      const separating = (b.vx - a.vx) * ux + (b.vy - a.vy) * uy;
+      // Allungamento previsto a fine passo oltre il limite (la parte già in eccesso si recupera al 20% per passo).
+      const excess = dist + separating * dt - PHYSICS.maxMuscleLength;
+      if (excess <= 0) return;
+      const overNow = Math.max(0, dist - PHYSICS.maxMuscleLength);
+      const cut = excess / dt - overNow * (1 - 0.2) / dt;
+      if (cut <= 0) return;
+      const shareA = b.mass / (a.mass + b.mass);
+      const shareB = a.mass / (a.mass + b.mass);
+      a.vx += ux * cut * shareA;
+      a.vy += uy * cut * shareA;
+      b.vx -= ux * cut * shareB;
+      b.vy -= uy * cut * shareB;
+    });
+  }
 }
 
 function stepPhysics(creature, state, t, dt) {
-  moveWithObstacles(state, () => enforceMuscleLength(creature, state));
   const forces = state.nodes.map(() => ({ fx: 0, fy: -PHYSICS.gravity }));
   // Carica graduale: impedisce il balzo iniziale dovuto allo scatto dei muscoli.
   const maxForce = PHYSICS.maxMuscleForce * (PHYSICS.energyRamp > 0 ? Math.min(1, t / PHYSICS.energyRamp) : 1);
@@ -403,12 +404,13 @@ function stepPhysics(creature, state, t, dt) {
   });
 
   state.nodes.forEach((n, i) => {
-    const ax = forces[i].fx / n.mass;
-    const ay = forces[i].fy / n.mass;
+    n.vx = (n.vx + (forces[i].fx / n.mass) * dt) * (1 - PHYSICS.airDrag);
+    n.vy = (n.vy + (forces[i].fy / n.mass) * dt) * (1 - PHYSICS.airDrag);
+  });
 
-    n.vx = (n.vx + ax * dt) * (1 - PHYSICS.airDrag);
-    n.vy = (n.vy + ay * dt) * (1 - PHYSICS.airDrag);
+  limitMuscleLength(creature, state, dt);
 
+  state.nodes.forEach((n) => {
     const prevX = n.x;
     const prevY = n.y;
     n.x += n.vx * dt;

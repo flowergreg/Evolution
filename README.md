@@ -45,7 +45,8 @@ Piccola web app in JavaScript vanilla che simula, in modo didattico, una selezio
   tutto il percorso del nodo, così nemmeno un nodo veloce può scavalcarli. Anche i muscoli sono solidi: non possono
   passare attraverso gli spigoli degli ostacoli.
 - Limite alla forza di ogni muscolo e alla sua lunghezza: oltre **1,5 m** un muscolo non si allunga più,
-  come una corda tesa (impedisce di "lanciare un'ancora" lontano e tirarsi dietro il corpo).
+  come una corda tesa (impedisce di "lanciare un'ancora" lontano e tirarsi dietro il corpo). La corda agisce
+  con spinte uguali e opposte sulle velocità dei due nodi, così l'attrito col suolo continua a trattenere un nodo ancorato.
 
 ## Visualizzazione
 
