@@ -11,7 +11,7 @@
       <header>
         <h1>Simulatore semplificato di selezione naturale</h1>
         <p>
-          1000 creature casuali → selezione delle migliori 500 → 500 figli mutati.
+          1000 creature casuali → sopravvivono 500 (almeno 40 per specie) → 500 figli, con mutazioni e incroci.
         </p>
       </header>
 
@@ -25,8 +25,47 @@
             <input id="autoSpeed" type="range" min="0" max="1500" value="200" step="50" />
           </label>
           <span id="autoSpeedLabel">350 ms</span>
+          <label>
+            Intensità mutazioni
+            <input id="mutationStrength" type="range" min="0" max="3" value="1" step="0.1" />
+          </label>
+          <span id="mutationLabel">×1.0</span>
         </div>
         <div class="stats" id="stats"></div>
+      </section>
+
+      <section class="card env">
+        <div class="env-head">
+          <h2>Ambiente</h2>
+          <button id="envResetBtn">Valori iniziali</button>
+          <span class="hint">Le modifiche valgono dal ciclo successivo: tutte le creature vengono rivalutate.</span>
+        </div>
+        <div class="env-groups">
+          <fieldset>
+            <legend>Ostacoli (m)</legend>
+            <label>Altezza (0 = piatto) <input data-env="terrain.height" type="number" min="0" max="1" step="0.05" value="0.2" /></label>
+            <label>Larghezza <input data-env="terrain.width" type="number" min="0.05" max="3" step="0.05" value="0.2" /></label>
+            <label>Distanza fra ostacoli <input data-env="terrain.gap" type="number" min="0.1" max="10" step="0.1" value="1.5" /></label>
+          </fieldset>
+          <fieldset>
+            <legend>Fisica</legend>
+            <label>Gravità (m/s²) <input data-env="physics.gravity" type="number" min="0" max="30" step="0.1" value="9.81" /></label>
+            <label>Resistenza dell'aria (% di velocità persa ogni 0,05 s) <input data-env="physics.airDrag" data-scale="0.01" type="number" min="0" max="20" step="0.5" value="2" /></label>
+          </fieldset>
+          <fieldset>
+            <legend>Muscoli</legend>
+            <label>Forza massima <input data-env="physics.maxMuscleForce" type="number" min="10" max="1000" step="10" value="160" /></label>
+            <label>Lunghezza massima (m) <input data-env="physics.maxMuscleLength" type="number" min="0.3" max="5" step="0.1" value="1.5" /></label>
+            <label>Carica iniziale (s) <input data-env="physics.energyRamp" type="number" min="0" max="3" step="0.1" value="0.5" /></label>
+          </fieldset>
+          <fieldset>
+            <legend>Energia dei muscoli</legend>
+            <label>Energia iniziale <input data-env="physics.muscleEnergy" type="number" min="1" max="1000" step="10" value="100" /></label>
+            <label>Ricarica al secondo <input data-env="physics.energyRecharge" type="number" min="0" max="200" step="1" value="10" /></label>
+            <label>Costo per unità di lavoro <input data-env="physics.energyCost" type="number" min="0" max="2" step="0.01" value="0.1" /></label>
+            <label>Velocità di riferimento del costo (m/s) <input data-env="physics.energySpeedRef" type="number" min="0.05" max="10" step="0.05" value="0.5" /></label>
+          </fieldset>
+        </div>
       </section>
 
       <section class="worlds">
@@ -43,6 +82,15 @@
       <section class="chart card">
         <h2>Andamento distanza</h2>
         <canvas id="chartCanvas" width="900" height="320"></canvas>
+      </section>
+
+      <section class="chart card">
+        <h2>Specie nella popolazione (% per numero di nodi)</h2>
+        <div class="legend" id="speciesLegend"></div>
+        <div class="chart-wrap">
+          <canvas id="speciesCanvas" width="900" height="320"></canvas>
+          <div class="tooltip" id="speciesTooltip" hidden></div>
+        </div>
       </section>
     </main>
 

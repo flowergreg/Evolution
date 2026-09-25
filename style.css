@@ -65,6 +65,110 @@ button:hover {
   border-color: var(--accent2);
 }
 
+.env-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.6rem;
+  margin-bottom: 0.6rem;
+}
+
+.env-head h2 {
+  margin: 0;
+}
+
+.env-groups {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 0.6rem;
+}
+
+.env fieldset {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  margin: 0;
+  padding: 0.5rem 0.7rem 0.7rem;
+  display: grid;
+  gap: 0.4rem;
+}
+
+.env legend {
+  color: var(--muted);
+  font-size: 0.85rem;
+  padding: 0 0.3rem;
+}
+
+.env label {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.9rem;
+}
+
+.env input {
+  width: 5rem;
+  flex: none;
+  background: #0f172a;
+  color: var(--text);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 0.25rem 0.4rem;
+}
+
+.legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem 1rem;
+  margin-bottom: 0.5rem;
+  font-size: 0.85rem;
+  color: var(--text);
+}
+
+.legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.legend i {
+  width: 12px;
+  height: 12px;
+  border-radius: 3px;
+  display: inline-block;
+}
+
+.chart-wrap {
+  position: relative;
+}
+
+.tooltip {
+  position: absolute;
+  top: 8px;
+  pointer-events: none;
+  background: #0f172a;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 0.45rem 0.6rem;
+  font-size: 0.8rem;
+  color: var(--text);
+  line-height: 1.45;
+  white-space: nowrap;
+}
+
+.tooltip i {
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+  display: inline-block;
+  margin-right: 0.35rem;
+}
+
+.hint {
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
 .stats {
   margin-top: 0.9rem;
   display: grid;
@@ -78,6 +182,10 @@ canvas {
   border: 1px solid var(--line);
   border-radius: 8px;
   background: #0b1020;
+}
+
+.stats .species {
+  grid-column: 1 / -1;
 }
 
 .worlds {
